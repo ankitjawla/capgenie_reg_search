@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+.dark html,
+.dark body {
+  background-color: #0f172a;
+  color: #f1f5f9;
+}
+
+/* Print — produce a clean compliance-memo layout */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  html,
+  body,
+  .dark html,
+  .dark body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+  details:not([open]) {
+    page-break-inside: avoid;
+  }
+  details {
+    page-break-inside: avoid;
+  }
+  details > summary {
+    list-style: none;
+    cursor: default;
+  }
+  details > summary::marker {
+    display: none;
+  }
+  section,
+  .print-card {
+    page-break-inside: avoid;
+    border-color: #e2e8f0 !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+  }
+  a {
+    color: #4338ca !important;
+    text-decoration: underline;
+  }
+}
