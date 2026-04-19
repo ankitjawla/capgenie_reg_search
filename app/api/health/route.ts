@@ -1,6 +1,8 @@
 // Lightweight health probe. Doesn't burn Azure / Tavily credits — just
 // reports config presence so external monitors can detect mis-configuration.
 
+import { dbEnabled } from '@/lib/db';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +15,7 @@ export async function GET() {
     !!process.env.TAVILY_API_KEY ||
     !!process.env.SERPAPI_KEY ||
     !!process.env.BING_SEARCH_API_KEY;
+  const sentryConfigured = !!process.env.SENTRY_DSN || !!process.env.NEXT_PUBLIC_SENTRY_DSN;
 
   const ready = azureConfigured && searchConfigured;
 
@@ -31,6 +34,8 @@ export async function GET() {
           : process.env.BING_SEARCH_API_KEY
           ? 'bing'
           : null,
+        db: dbEnabled,
+        sentry: sentryConfigured,
       },
       uptimeSec: Math.round(process.uptime()),
       timestamp: new Date().toISOString(),
