@@ -9,6 +9,13 @@ import ReportsList from '@/components/ReportsList';
 import FilingCalendar from '@/components/FilingCalendar';
 import ResearchTranscript from '@/components/ResearchTranscript';
 import FollowupChat from '@/components/FollowupChat';
+import ProgressGraph from '@/components/ProgressGraph';
+import CommandPalette from '@/components/CommandPalette';
+import {
+  ReportsByJurisdictionChart,
+  ReportsByFrequencyChart,
+  AssetsByJurisdictionChart,
+} from '@/components/charts';
 import { applyRules } from '@/lib/rules';
 import type { AnalysisResult, BankProfile } from '@/lib/types';
 import {
@@ -269,36 +276,44 @@ export default function Home() {
       </div>
 
       {(loading || progress.length > 0) && (
-        <div
-          className="mt-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm no-print dark:border-slate-700 dark:bg-slate-900"
-          aria-live="polite"
-        >
-          {loading && (
-            <div className="flex items-center gap-3 text-slate-700 dark:text-slate-200">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
-              <span className="text-sm">Researching {bankName || 'the bank'}…</span>
-            </div>
-          )}
-          {progress.length > 0 && (
-            <ul className="mt-3 space-y-1 text-sm">
-              {progress.map((p, i) => (
-                <li key={i} className="flex gap-2">
-                  <span
-                    className={`mt-0.5 inline-block h-2 w-2 flex-none rounded-full ${
-                      p.kind === 'search'
-                        ? 'bg-blue-500'
-                        : p.kind === 'info'
-                        ? 'bg-slate-400'
-                        : 'bg-emerald-500'
-                    }`}
-                  />
-                  <span className={p.kind === 'text' ? 'text-slate-600 dark:text-slate-400' : 'text-slate-700 dark:text-slate-200'}>
-                    {p.text}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
+        <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_360px]">
+          <div
+            className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm no-print dark:border-slate-700 dark:bg-slate-900"
+            aria-live="polite"
+          >
+            {loading && (
+              <div className="flex items-center gap-3 text-slate-700 dark:text-slate-200">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+                <span className="text-sm">Researching {bankName || 'the bank'}…</span>
+              </div>
+            )}
+            {progress.length > 0 && (
+              <ul className="mt-3 max-h-72 space-y-1 overflow-y-auto text-sm">
+                {progress.slice(-30).map((p, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span
+                      className={`mt-0.5 inline-block h-2 w-2 flex-none rounded-full ${
+                        p.kind === 'search'
+                          ? 'bg-blue-500'
+                          : p.kind === 'info'
+                          ? 'bg-slate-400'
+                          : 'bg-emerald-500'
+                      }`}
+                    />
+                    <span className={p.kind === 'text' ? 'text-slate-600 dark:text-slate-400' : 'text-slate-700 dark:text-slate-200'}>
+                      {p.text}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="no-print">
+            <ProgressGraph
+              infoLog={progress.filter((p) => p.kind === 'info').map((p) => p.text)}
+              done={!loading}
+            />
+          </div>
         </div>
       )}
 
@@ -399,13 +414,24 @@ export default function Home() {
             </div>
           </div>
 
-          {tab === 'reports' ? (
-            <ReportsList reports={reports} bankName={bankName} profile={profile} />
-          ) : (
-            <FilingCalendar reports={reports} />
-          )}
+          {/* Visual analytics — adapts to which tab is active */}
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <ReportsByJurisdictionChart reports={reports} />
+            <ReportsByFrequencyChart reports={reports} />
+            <AssetsByJurisdictionChart profile={profile} />
+          </div>
 
-          <FollowupChat profile={profile} reports={reports} />
+          <div id={tab === 'reports' ? 'reports' : 'calendar'}>
+            {tab === 'reports' ? (
+              <ReportsList reports={reports} bankName={bankName} profile={profile} />
+            ) : (
+              <FilingCalendar reports={reports} />
+            )}
+          </div>
+
+          <div id="chat">
+            <FollowupChat profile={profile} reports={reports} />
+          </div>
 
           <footer className="pt-2 text-xs text-slate-400 dark:text-slate-500">
             {apiResult
@@ -419,6 +445,72 @@ export default function Home() {
 
       {trace && (
         <ResearchTranscript trace={trace} open={transcriptOpen} onClose={() => setTranscriptOpen(false)} />
+      )}
+
+      <CommandPalette
+        savedBanks={bankName ? [{ bankName, savedAtIso: new Date().toISOString() }] : []}
+        onAnalyze={(name) => {
+          void runAnalysis(name);
+        }}
+        onTheme={setThemeAndPersist}
+        onTab={setTab}
+        onCompare={() => {
+          window.location.href = '/compare';
+        }}
+        onTranscript={() => setTranscriptOpen(true)}
+        onExportCsv={() => {
+          // Switch to reports tab; the user can click the Export CSV button there.
+          setTab('reports');
+          requestAnimationFrame(() => {
+            document.getElementById('reports')?.scrollIntoView({ behavior: 'smooth' });
+          });
+        }}
+        onClearSaved={handleClearPersisted}
+      />
+
+      {/* Sticky in-page nav — only when there are results */}
+      {profile && (
+        <nav className="fixed bottom-4 left-1/2 z-30 hidden -translate-x-1/2 rounded-full border border-slate-200 bg-white/90 px-3 py-1 text-xs shadow-lg backdrop-blur sm:block no-print dark:border-slate-700 dark:bg-slate-900/90">
+          <ul className="flex items-center gap-3">
+            <li>
+              <a href="#profile" className="text-slate-600 hover:text-brand-600 dark:text-slate-300">
+                Profile
+              </a>
+            </li>
+            <li className="text-slate-300 dark:text-slate-600">·</li>
+            <li>
+              <a href="#reports" className="text-slate-600 hover:text-brand-600 dark:text-slate-300">
+                Reports
+              </a>
+            </li>
+            <li className="text-slate-300 dark:text-slate-600">·</li>
+            <li>
+              <a href="#chat" className="text-slate-600 hover:text-brand-600 dark:text-slate-300">
+                Chat
+              </a>
+            </li>
+            {trace && (
+              <>
+                <li className="text-slate-300 dark:text-slate-600">·</li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => setTranscriptOpen(true)}
+                    className="text-slate-600 hover:text-brand-600 dark:text-slate-300"
+                  >
+                    Transcript
+                  </button>
+                </li>
+              </>
+            )}
+            <li className="text-slate-300 dark:text-slate-600">·</li>
+            <li>
+              <kbd className="rounded border border-slate-300 px-1 text-[10px] text-slate-500 dark:border-slate-600 dark:text-slate-400">
+                ⌘K
+              </kbd>
+            </li>
+          </ul>
+        </nav>
       )}
     </main>
   );

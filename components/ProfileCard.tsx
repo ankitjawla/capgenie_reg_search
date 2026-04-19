@@ -1,4 +1,6 @@
-import type { BankProfile } from '@/lib/types';
+import type { BankProfile, Jurisdiction } from '@/lib/types';
+import Flag from './ui/Flag';
+import KpiTile from './ui/KpiTile';
 
 const TIER_LABELS: Record<string, string> = {
   lt_1B: '< $1B',
@@ -11,76 +13,126 @@ const TIER_LABELS: Record<string, string> = {
   unknown: 'Unknown',
 };
 
-const JURISDICTION_LABEL: Record<string, string> = {
+const JURISDICTION_LABEL: Record<Jurisdiction, string> = {
   US: 'United States',
   UK: 'United Kingdom',
   EU: 'European Union',
   IN: 'India',
 };
 
+function humanize(s: string): string {
+  return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatAssets(profile: BankProfile): string {
+  if (profile.globalAssetsUsdB) {
+    if (profile.globalAssetsUsdB >= 1000) return `$${(profile.globalAssetsUsdB / 1000).toFixed(2)}T`;
+    return `$${profile.globalAssetsUsdB.toFixed(0)}B`;
+  }
+  return TIER_LABELS[profile.assetSizeTier] ?? '—';
+}
+
 export default function ProfileCard({ profile }: { profile: BankProfile }) {
+  const designations: string[] = [];
+  if (profile.isGSIB) designations.push('G-SIB');
+  if (profile.isDSIB) designations.push('D-SIB');
+  if (profile.isPubliclyListed) designations.push('Listed');
+  if (profile.isFDICInsured) designations.push('FDIC');
+
+  const jurisdictions = profile.presence.map((p) => p.jurisdiction);
+
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
+    <section
+      id="profile"
+      className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900 print-card"
+    >
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold text-slate-900">{profile.legalName}</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+            {profile.legalName}
+          </h2>
           {profile.commonName && profile.commonName !== profile.legalName && (
-            <p className="text-sm text-slate-500">also known as {profile.commonName}</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">also known as {profile.commonName}</p>
           )}
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <span>{humanize(profile.category)}</span>
+            {profile.hqCountry && (
+              <>
+                <span aria-hidden>·</span>
+                <span>HQ {profile.hqCountry}</span>
+              </>
+            )}
+          </div>
         </div>
-        <div className="flex flex-col items-end gap-1">
-          {profile.isGSIB && (
-            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">G-SIB</span>
-          )}
-          {profile.isDSIB && !profile.isGSIB && (
-            <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">D-SIB</span>
-          )}
-          {profile.isPubliclyListed && (
-            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-              Publicly listed
+        {designations.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1">
+            {profile.isGSIB && <Badge tone="red">G-SIB</Badge>}
+            {profile.isDSIB && !profile.isGSIB && <Badge tone="orange">D-SIB</Badge>}
+            {profile.isPubliclyListed && <Badge tone="emerald">Listed</Badge>}
+            {profile.isFDICInsured && <Badge tone="blue">FDIC</Badge>}
+          </div>
+        )}
+      </header>
+
+      {/* KPI Strip */}
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <KpiTile
+          label="Total assets"
+          value={formatAssets(profile)}
+          detail={profile.globalAssetsUsdB ? TIER_LABELS[profile.assetSizeTier] : 'estimated tier'}
+        />
+        <KpiTile
+          label="Asset tier"
+          value={TIER_LABELS[profile.assetSizeTier] ?? '—'}
+          accent="brand"
+        />
+        <KpiTile
+          label="Jurisdictions"
+          value={
+            <span className="flex flex-wrap items-center gap-1">
+              {jurisdictions.length === 0 ? (
+                '—'
+              ) : (
+                jurisdictions.map((j) => (
+                  <Flag key={j} jurisdiction={j} size="md" />
+                ))
+              )}
             </span>
-          )}
-        </div>
+          }
+          detail={`${jurisdictions.length} active`}
+        />
+        <KpiTile
+          label="Designations"
+          value={designations.length > 0 ? designations.join(' · ') : 'None'}
+          accent={profile.isGSIB ? 'red' : profile.isDSIB ? 'amber' : 'default'}
+        />
       </div>
 
-      <dl className="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-        <div>
-          <dt className="text-slate-500">HQ country</dt>
-          <dd className="font-medium text-slate-900">{profile.hqCountry ?? '—'}</dd>
-        </div>
-        <div>
-          <dt className="text-slate-500">Category</dt>
-          <dd className="font-medium text-slate-900">{humanize(profile.category)}</dd>
-        </div>
-        <div>
-          <dt className="text-slate-500">Total assets</dt>
-          <dd className="font-medium text-slate-900">
-            {profile.globalAssetsUsdB
-              ? `~$${profile.globalAssetsUsdB.toFixed(0)}B`
-              : TIER_LABELS[profile.assetSizeTier]}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-slate-500">Size tier</dt>
-          <dd className="font-medium text-slate-900">{TIER_LABELS[profile.assetSizeTier]}</dd>
-        </div>
-      </dl>
-
       {profile.presence.length > 0 && (
-        <div className="mt-4">
-          <h3 className="text-sm font-semibold text-slate-700">Regulated presence</h3>
-          <ul className="mt-2 space-y-1 text-sm text-slate-700">
+        <div className="mt-5">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Regulated presence
+          </h3>
+          <ul className="mt-2 space-y-2 text-sm">
             {profile.presence.map((p) => (
-              <li key={p.jurisdiction} className="flex flex-wrap items-baseline gap-2">
-                <span className="inline-flex min-w-[4.5rem] justify-center rounded-md bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
-                  {JURISDICTION_LABEL[p.jurisdiction] ?? p.jurisdiction}
+              <li
+                key={p.jurisdiction}
+                className="flex flex-wrap items-baseline gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-800/40"
+              >
+                <Flag jurisdiction={p.jurisdiction} size="lg" />
+                <span className="font-semibold text-slate-800 dark:text-slate-100">
+                  {JURISDICTION_LABEL[p.jurisdiction]}
                 </span>
-                <span className="text-slate-700">
+                <span className="text-slate-700 dark:text-slate-300">
                   {humanize(p.entityType)}
                   {p.isFBO ? ' (FBO)' : ''}
-                  {p.jurisdictionAssetsUsdB ? ` · ~$${p.jurisdictionAssetsUsdB.toFixed(0)}B assets` : ''}
-                  {p.notes ? ` — ${p.notes}` : ''}
+                  {p.jurisdictionAssetsUsdB ? ` · ~$${p.jurisdictionAssetsUsdB.toFixed(0)}B` : ''}
                 </span>
+                {p.notes && (
+                  <span className="block w-full text-xs text-slate-500 dark:text-slate-400">
+                    {p.notes}
+                  </span>
+                )}
               </li>
             ))}
           </ul>
@@ -89,12 +141,14 @@ export default function ProfileCard({ profile }: { profile: BankProfile }) {
 
       {profile.activities.length > 0 && (
         <div className="mt-4">
-          <h3 className="text-sm font-semibold text-slate-700">Business activities</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Business activities
+          </h3>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {profile.activities.map((a) => (
               <span
                 key={a}
-                className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700"
+                className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
               >
                 {humanize(a)}
               </span>
@@ -104,12 +158,19 @@ export default function ProfileCard({ profile }: { profile: BankProfile }) {
       )}
 
       {profile.rationale && (
-        <p className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">{profile.rationale}</p>
+        <details className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-700 dark:bg-slate-800/40 dark:text-slate-200" open>
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Research rationale
+          </summary>
+          <p className="mt-2 whitespace-pre-wrap">{profile.rationale}</p>
+        </details>
       )}
 
       {profile.sources && profile.sources.length > 0 && (
         <div className="mt-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sources</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Sources
+          </h3>
           <ul className="mt-1 space-y-0.5 text-xs">
             {profile.sources.map((s, i) => (
               <li key={i}>
@@ -117,7 +178,7 @@ export default function ProfileCard({ profile }: { profile: BankProfile }) {
                   href={s.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-brand-700 underline decoration-brand-300 underline-offset-2 hover:decoration-brand-600"
+                  className="text-brand-700 underline decoration-brand-300 underline-offset-2 hover:decoration-brand-600 dark:text-brand-400"
                 >
                   {s.title ?? s.url}
                 </a>
@@ -130,8 +191,14 @@ export default function ProfileCard({ profile }: { profile: BankProfile }) {
   );
 }
 
-function humanize(s: string): string {
-  return s
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+function Badge({ tone, children }: { tone: 'red' | 'orange' | 'emerald' | 'blue'; children: React.ReactNode }) {
+  const cls = {
+    red: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200',
+    orange: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-200',
+    emerald: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200',
+    blue: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200',
+  }[tone];
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${cls}`}>{children}</span>
+  );
 }

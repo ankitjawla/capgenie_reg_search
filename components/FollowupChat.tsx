@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import type { BankProfile, ReportRecommendation } from '@/lib/types';
+import { explainReport, findCatalogIdByName } from '@/lib/rules-debug';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -28,6 +29,25 @@ export default function FollowupChat({ profile, reports }: Props) {
     setError(null);
     setHistory((h) => [...h, { role: 'user', content: question }, { role: 'assistant', content: '' }]);
     setStreaming(true);
+
+    // Client-side shortcut: if the question is "why isn't X here?" / "explain X",
+    // run the rules engine directly and show the boolean trace — no LLM call.
+    const ruleHit = matchRuleQuery(question);
+    if (ruleHit) {
+      const explanation = explainReport(ruleHit, profile);
+      if (explanation) {
+        const text = `**${explanation.shortName}** (${explanation.jurisdiction}) — ${
+          explanation.applies ? 'Applies' : 'Not in the recommended list'
+        }\n\n${explanation.reason}`;
+        setHistory((h) => {
+          const copy = [...h];
+          copy[copy.length - 1] = { role: 'assistant', content: text };
+          return copy;
+        });
+        setStreaming(false);
+        return;
+      }
+    }
 
     try {
       const res = await fetch('/api/chat', {
@@ -83,6 +103,33 @@ export default function FollowupChat({ profile, reports }: Props) {
     } finally {
       setStreaming(false);
     }
+  }
+
+  function matchRuleQuery(q: string): string | null {
+    // "why isn't FFIEC 101 here?" / "explain FR Y-14A" / "does this bank file
+    // PRA110?" — extract the report name and look it up in the catalog.
+    const lower = q.toLowerCase();
+    const isWhyish =
+      lower.includes('why') ||
+      lower.includes('explain') ||
+      lower.includes('does this bank file') ||
+      lower.includes("isn't") ||
+      lower.startsWith('is ');
+    if (!isWhyish) return null;
+    // Drop common stop words then probe each remaining token / 2-token combo
+    // against the catalog by short or full name.
+    const tokens = q
+      .replace(/[?.,]/g, ' ')
+      .split(/\s+/)
+      .filter((t) => t && !STOP_WORDS.has(t.toLowerCase()));
+    // Try longest n-gram first.
+    for (let n = Math.min(5, tokens.length); n >= 1; n--) {
+      for (let i = 0; i + n <= tokens.length; i++) {
+        const phrase = tokens.slice(i, i + n).join(' ');
+        if (findCatalogIdByName(phrase)) return phrase;
+      }
+    }
+    return null;
   }
 
   return (
@@ -150,3 +197,32 @@ export default function FollowupChat({ profile, reports }: Props) {
     </section>
   );
 }
+
+const STOP_WORDS = new Set([
+  'why',
+  'isnt',
+  "isn't",
+  'is',
+  'this',
+  'bank',
+  'here',
+  'in',
+  'the',
+  'list',
+  'a',
+  'an',
+  'are',
+  'do',
+  'does',
+  'file',
+  'apply',
+  'applies',
+  'explain',
+  'about',
+  'for',
+  'to',
+  'of',
+  'and',
+  'or',
+  'should',
+]);
