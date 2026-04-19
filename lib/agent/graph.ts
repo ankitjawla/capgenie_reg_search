@@ -24,6 +24,8 @@ import { HumanMessage, SystemMessage, AIMessage, type BaseMessage } from '@langc
 import { z } from 'zod';
 import { bankProfileSchema, makeWebSearchTool } from './tools';
 import type { BankProfile, Jurisdiction, SearchStep } from '../types';
+import type { BingSearchResult } from '../bing';
+import { logJson } from '../errors';
 
 const ALL_JURISDICTIONS: Jurisdiction[] = ['US', 'UK', 'EU', 'IN', 'CA', 'SG', 'HK'];
 
@@ -33,6 +35,14 @@ export interface DeepAgentOptions {
   deployment?: string;
   apiVersion?: string;
   trace: SearchStep[];
+  // Per-request cross-jurisdiction search cache (dedupes identical queries
+  // between researchers, e.g. "X is G-SIB" only hits Tavily once).
+  searchCache?: Map<string, BingSearchResult[]>;
+  // Propagated from the HTTP request so Azure + Tavily calls abort when
+  // the client disconnects.
+  signal?: AbortSignal;
+  // Correlation id for structured logs.
+  requestId?: string;
 }
 
 function makeLLM(opts: DeepAgentOptions): AzureChatOpenAI {
@@ -158,28 +168,61 @@ function makeResearcherNode(
   jur: Jurisdiction,
   trace: SearchStep[],
   llm: AzureChatOpenAI,
+  searchCache: Map<string, BingSearchResult[]>,
+  signal: AbortSignal | undefined,
+  requestId: string | undefined,
 ) {
   return async (state: State): Promise<Partial<State>> => {
     if (!state.jurisdictionsToProbe.includes(jur)) {
       return { findings: { [jur]: '(not probed — planner excluded this jurisdiction)' } };
     }
-    const webSearch = makeWebSearchTool(trace, `researcher-${jur}`);
+    const nodeStartedAt = Date.now();
+    const webSearch = makeWebSearchTool({
+      trace,
+      agentLabel: `researcher-${jur}`,
+      searchCache,
+      signal,
+    });
     const subAgent = createReactAgent({
       llm,
       tools: [webSearch],
       prompt: RESEARCHER_PROMPT(jur, state.identityNotes, state.bankName),
     });
-    const result = await subAgent.invoke(
-      {
-        messages: [
-          new HumanMessage(`Begin your ${jur}-presence research for "${state.bankName}" now.`),
-        ],
-      },
-      { recursionLimit: 12 },
-    );
-    const last = result.messages[result.messages.length - 1];
-    const text = typeof last?.content === 'string' ? last.content : JSON.stringify(last?.content ?? '');
-    return { findings: { [jur]: text } };
+    try {
+      const result = await subAgent.invoke(
+        {
+          messages: [
+            new HumanMessage(`Begin your ${jur}-presence research for "${state.bankName}" now.`),
+          ],
+        },
+        { recursionLimit: 12, signal },
+      );
+      const last = result.messages[result.messages.length - 1];
+      const text = typeof last?.content === 'string' ? last.content : JSON.stringify(last?.content ?? '');
+      logJson({
+        level: 'info',
+        requestId,
+        route: 'agent.graph',
+        msg: 'researcher.complete',
+        node: `researcher-${jur}`,
+        durationMs: Date.now() - nodeStartedAt,
+        findingsLen: text.length,
+      });
+      return { findings: { [jur]: text } };
+    } catch (err) {
+      logJson({
+        level: 'warn',
+        requestId,
+        route: 'agent.graph',
+        msg: 'researcher.failed',
+        node: `researcher-${jur}`,
+        durationMs: Date.now() - nodeStartedAt,
+        err: (err as Error).message,
+      });
+      return {
+        findings: { [jur]: `(research failed: ${(err as Error).message})` },
+      };
+    }
   };
 }
 
@@ -190,10 +233,10 @@ const verifierSchema = z.object({
     'A 3-8 sentence summary of what you verified, what you couldn\'t verify, and any discrepancies between researcher reports.',
   ),
   retryJurisdiction: z
-    .enum(['US', 'UK', 'EU', 'IN'])
+    .enum(['US', 'UK', 'EU', 'IN', 'CA', 'SG', 'HK'])
     .nullable()
     .describe(
-      'If one specific jurisdiction\'s findings are internally inconsistent, uncited, or clearly wrong, name it here and the graph will re-run that researcher. Otherwise null.',
+      'If ONE specific jurisdiction\'s findings are internally inconsistent, uncited, or clearly wrong, name it here and the graph will re-run that researcher. Otherwise null.',
     ),
 });
 
@@ -269,19 +312,22 @@ Emit the final BankProfile now.`,
 
 export function buildDeepAgent(opts: DeepAgentOptions) {
   const llm = makeLLM(opts);
+  const searchCache = opts.searchCache ?? new Map<string, BingSearchResult[]>();
+  const signal = opts.signal;
+  const requestId = opts.requestId;
 
   // StateGraph's chaining API widens the node-name union on each addNode,
   // so we must build the graph in one expression — assigning it to a
   // `const` mid-chain freezes the type at `__start__` only.
   const compiled = new StateGraph(AgentState)
     .addNode('planner', (s) => plannerNode(s, llm))
-    .addNode('researchUS', makeResearcherNode('US', opts.trace, llm))
-    .addNode('researchUK', makeResearcherNode('UK', opts.trace, llm))
-    .addNode('researchEU', makeResearcherNode('EU', opts.trace, llm))
-    .addNode('researchIN', makeResearcherNode('IN', opts.trace, llm))
-    .addNode('researchCA', makeResearcherNode('CA', opts.trace, llm))
-    .addNode('researchSG', makeResearcherNode('SG', opts.trace, llm))
-    .addNode('researchHK', makeResearcherNode('HK', opts.trace, llm))
+    .addNode('researchUS', makeResearcherNode('US', opts.trace, llm, searchCache, signal, requestId))
+    .addNode('researchUK', makeResearcherNode('UK', opts.trace, llm, searchCache, signal, requestId))
+    .addNode('researchEU', makeResearcherNode('EU', opts.trace, llm, searchCache, signal, requestId))
+    .addNode('researchIN', makeResearcherNode('IN', opts.trace, llm, searchCache, signal, requestId))
+    .addNode('researchCA', makeResearcherNode('CA', opts.trace, llm, searchCache, signal, requestId))
+    .addNode('researchSG', makeResearcherNode('SG', opts.trace, llm, searchCache, signal, requestId))
+    .addNode('researchHK', makeResearcherNode('HK', opts.trace, llm, searchCache, signal, requestId))
     .addNode('verifier', (s) => verifierNode(s, llm))
     .addNode('synthesizer', (s) => synthesizerNode(s, llm))
     // Planner fans out to every researcher in parallel. Researchers for

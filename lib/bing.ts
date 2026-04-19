@@ -19,19 +19,32 @@ const TAVILY_ENDPOINT = 'https://api.tavily.com/search';
 const SERPAPI_ENDPOINT_DEFAULT = 'https://serpapi.com/search';
 const SERPAPI_ENGINE = 'bing';
 
+export interface SearchOptions {
+  count?: number;
+  signal?: AbortSignal;
+}
+
 export async function bingWebSearch(
   query: string,
-  count = Number(process.env.BING_SEARCH_RESULTS_PER_QUERY ?? 5),
+  countOrOpts: number | SearchOptions = Number(process.env.BING_SEARCH_RESULTS_PER_QUERY ?? 5),
 ): Promise<BingSearchResult[]> {
+  const opts: SearchOptions =
+    typeof countOrOpts === 'number' ? { count: countOrOpts } : countOrOpts;
+  const count = opts.count ?? Number(process.env.BING_SEARCH_RESULTS_PER_QUERY ?? 5);
+  const signal = opts.signal;
   if (process.env.TAVILY_API_KEY) {
-    return tavilySearch(query, count);
+    return tavilySearch(query, count, signal);
   }
-  return serpapiSearch(query, count);
+  return serpapiSearch(query, count, signal);
 }
 
 // ---- Tavily ---------------------------------------------------------------
 
-async function tavilySearch(query: string, count: number): Promise<BingSearchResult[]> {
+async function tavilySearch(
+  query: string,
+  count: number,
+  signal?: AbortSignal,
+): Promise<BingSearchResult[]> {
   const apiKey = process.env.TAVILY_API_KEY!;
   let res: Response;
   try {
@@ -50,6 +63,7 @@ async function tavilySearch(query: string, count: number): Promise<BingSearchRes
         include_answer: false,
         include_raw_content: false,
       }),
+      signal,
     });
   } catch (e) {
     throw Object.assign(new Error(`Tavily network error: ${(e as Error).message}`), {
@@ -101,7 +115,11 @@ async function tavilySearch(query: string, count: number): Promise<BingSearchRes
 
 // ---- SerpAPI (Bing engine) fallback --------------------------------------
 
-async function serpapiSearch(query: string, count: number): Promise<BingSearchResult[]> {
+async function serpapiSearch(
+  query: string,
+  count: number,
+  signal?: AbortSignal,
+): Promise<BingSearchResult[]> {
   const apiKey = process.env.SERPAPI_KEY ?? process.env.BING_SEARCH_API_KEY;
   if (!apiKey) {
     throw Object.assign(
@@ -121,7 +139,7 @@ async function serpapiSearch(query: string, count: number): Promise<BingSearchRe
 
   let res: Response;
   try {
-    res = await fetch(url.toString());
+    res = await fetch(url.toString(), { signal });
   } catch (e) {
     throw Object.assign(new Error(`SerpAPI network error: ${(e as Error).message}`), {
       kind: 'network' as const,

@@ -16,6 +16,11 @@ export interface ExtractOptions {
   model?: string;
   maxWebSearches?: number;
   onEvent?: (evt: StreamEvent) => void;
+  // Propagated from the HTTP request so all upstream calls (Azure, Tavily)
+  // are cancelled when the user closes the tab.
+  signal?: AbortSignal;
+  // Correlation id so graph logs can be tied to the HTTP request.
+  requestId?: string;
 }
 
 export interface ExtractResult {
@@ -54,7 +59,11 @@ export async function extractBankProfileWithTrace(
   const trace: SearchStep[] = [];
   const started = Date.now();
 
-  const agent = buildDeepAgent({ trace });
+  const agent = buildDeepAgent({
+    trace,
+    signal: opts.signal,
+    requestId: opts.requestId,
+  });
 
   emit({ type: 'info', message: `Starting deep-agent research on "${bankName}"…` });
 
@@ -67,7 +76,7 @@ export async function extractBankProfileWithTrace(
 
   const stream = agent.streamEvents(
     { bankName },
-    { version: 'v2', recursionLimit: 60 },
+    { version: 'v2', recursionLimit: 60, signal: opts.signal },
   );
 
   for await (const event of stream) {

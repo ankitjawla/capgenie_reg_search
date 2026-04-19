@@ -43,10 +43,18 @@ export function rateLimit(key: string, opts: RateLimitOptions): RateLimitResult 
 }
 
 /**
- * Pull the client IP out of a Next.js Request. Vercel sets x-forwarded-for;
- * fall back to anonymous so dev still works.
+ * Pull the client IP out of a Next.js Request.
+ *
+ * On Vercel we prefer `x-vercel-forwarded-for` which Vercel sets after its
+ * single trusted edge proxy — unlike `x-forwarded-for`, this header cannot
+ * be spoofed by the end client (Vercel overwrites it).
+ *
+ * Locally / in tests we fall back to `x-forwarded-for` then the
+ * anonymous bucket so everything still works.
  */
 export function getClientKey(req: Request): string {
+  const vercelFwd = req.headers.get('x-vercel-forwarded-for');
+  if (vercelFwd) return vercelFwd.split(',')[0].trim();
   const fwd = req.headers.get('x-forwarded-for');
   if (fwd) return fwd.split(',')[0].trim();
   const real = req.headers.get('x-real-ip');

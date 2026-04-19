@@ -4,23 +4,23 @@
 
 import { AzureChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
+import * as Sentry from '@sentry/nextjs';
 import type { BankProfile, ReportRecommendation } from '@/lib/types';
 import { classifyLLMError, logJson, newRequestId } from '@/lib/errors';
 import { getClientKey, rateLimit } from '@/lib/rate-limit';
+import { chatRequestSchema } from '@/lib/validation';
+import { isOriginAllowed } from '@/lib/origin-check';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
+const TEXT_DELTA_FLUSH_MS = 60;
+const TEXT_DELTA_FLUSH_CHARS = 48;
+const HEARTBEAT_MS = 15_000;
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
-}
-
-interface Body {
-  profile: BankProfile;
-  reports: ReportRecommendation[];
-  history: ChatMessage[];
-  question: string;
 }
 
 function buildSystemPrompt(profile: BankProfile, reports: ReportRecommendation[]): string {
@@ -71,9 +71,18 @@ ${reportLines}
 
 export async function POST(req: Request) {
   const requestId = newRequestId();
+
+  if (!isOriginAllowed(req)) {
+    return Response.json(
+      { error: 'Origin not allowed.', requestId },
+      { status: 403, headers: { 'X-Request-Id': requestId } },
+    );
+  }
+
   const clientKey = getClientKey(req);
-  // Chat is cheaper than analyze — allow 20 messages/minute.
-  const limit = rateLimit(`chat:${clientKey}`, { capacity: 20, refillPerSec: 20 / 60 });
+  // Shared with analyze so alternating endpoints doesn't bypass the per-IP
+  // budget. Chat is still cheap — 20 calls/min each refill 1/3s.
+  const limit = rateLimit(`user:${clientKey}`, { capacity: 20, refillPerSec: 20 / 60 });
   if (!limit.allowed) {
     return Response.json(
       { error: 'Rate limit exceeded. Try again shortly.', kind: 'rate_limit', requestId },
@@ -84,27 +93,62 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: Body;
-  try {
-    body = (await req.json()) as Body;
-  } catch {
+  const parsed = chatRequestSchema.safeParse(await req.json().catch(() => ({})));
+  if (!parsed.success) {
     return Response.json(
-      { error: 'Invalid JSON body.', requestId },
+      {
+        error: parsed.error.issues.map((i) => i.message).join('; '),
+        kind: 'bad_request',
+        requestId,
+      },
       { status: 400, headers: { 'X-Request-Id': requestId } },
     );
   }
-
-  if (!body?.profile || !Array.isArray(body?.reports) || !body?.question?.trim()) {
-    return Response.json(
-      { error: 'profile, reports[], and question are required.', requestId },
-      { status: 400, headers: { 'X-Request-Id': requestId } },
-    );
-  }
+  const body = parsed.data as {
+    profile: BankProfile;
+    reports: ReportRecommendation[];
+    history: ChatMessage[];
+    question: string;
+  };
   logJson({ level: 'info', requestId, route: '/api/chat', msg: 'chat.start', q: body.question.slice(0, 80) });
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      let closed = false;
+      const safe = (bytes: Uint8Array) => {
+        if (closed) return;
+        try {
+          controller.enqueue(bytes);
+        } catch {
+          closed = true;
+        }
+      };
+      const send = (payload: Record<string, unknown>) =>
+        safe(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+      const heartbeat = () => safe(encoder.encode(`: keep-alive\n\n`));
+
+      let textBuffer = '';
+      let flushTimer: NodeJS.Timeout | null = null;
+      const flushText = () => {
+        if (!textBuffer) return;
+        send({ type: 'text', delta: textBuffer });
+        textBuffer = '';
+        if (flushTimer) {
+          clearTimeout(flushTimer);
+          flushTimer = null;
+        }
+      };
+      const pushDelta = (delta: string) => {
+        textBuffer += delta;
+        if (textBuffer.length >= TEXT_DELTA_FLUSH_CHARS) flushText();
+        else if (!flushTimer) flushTimer = setTimeout(flushText, TEXT_DELTA_FLUSH_MS);
+      };
+
+      const hbTimer = setInterval(heartbeat, HEARTBEAT_MS);
+      const controllerAbort = new AbortController();
+      req.signal.addEventListener('abort', () => controllerAbort.abort(), { once: true });
+
       try {
         const apiKey = process.env.AZURE_OPENAI_API_KEY;
         const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
@@ -116,9 +160,6 @@ export async function POST(req: Request) {
           );
         }
 
-        // See lib/agent/graph.ts — LangChain uses the `model` string to pick
-        // between `max_tokens` and `max_completion_tokens`; we pass the
-        // deployment as the model so GPT-5 / o-series deployments work.
         const llm = new AzureChatOpenAI({
           azureOpenAIApiKey: apiKey,
           azureOpenAIEndpoint: endpoint,
@@ -137,26 +178,38 @@ export async function POST(req: Request) {
           new HumanMessage(body.question),
         ];
 
-        const llmStream = await llm.stream(messages);
+        const llmStream = await llm.stream(messages, { signal: controllerAbort.signal });
         for await (const chunk of llmStream) {
           const content = chunk?.content;
-          if (typeof content === 'string' && content.length > 0) {
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ type: 'text', delta: content })}\n\n`),
-            );
-          }
+          if (typeof content === 'string' && content.length > 0) pushDelta(content);
         }
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`));
+        flushText();
+        send({ type: 'done' });
       } catch (err) {
-        console.error('chat route error', err);
-        const [payload] = classifyLLMError(err);
-        controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({ type: 'error', error: payload.error, kind: payload.kind })}\n\n`,
-          ),
-        );
+        flushText();
+        if ((err as Error)?.name === 'AbortError') {
+          logJson({ level: 'info', requestId, route: '/api/chat', msg: 'chat.aborted_by_client' });
+        } else {
+          const [payload] = classifyLLMError(err);
+          logJson({
+            level: 'error',
+            requestId,
+            route: '/api/chat',
+            msg: 'chat.error',
+            err: payload.error,
+          });
+          Sentry.captureException(err, { extra: { requestId, route: '/api/chat' } });
+          send({ type: 'error', error: payload.error, kind: payload.kind });
+        }
       } finally {
-        controller.close();
+        clearInterval(hbTimer);
+        flushText();
+        closed = true;
+        try {
+          controller.close();
+        } catch {
+          /* already closed */
+        }
       }
     },
   });

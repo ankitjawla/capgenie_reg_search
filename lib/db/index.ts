@@ -1,4 +1,5 @@
-// Neon-backed persistence with a graceful fallback.
+// Neon-backed persistence with a graceful fallback + in-flight stampede
+// protection.
 //
 // If DATABASE_URL is set, we hit Neon via the HTTP serverless driver — no
 // connection pool needed, works on Vercel's edge/serverless runtime.
@@ -12,6 +13,7 @@ import { and, desc, eq, gt, lt } from 'drizzle-orm';
 import { analyses, rowToAnalysisResult, type NewAnalysisRow } from './schema';
 import type { AnalysisResult } from '../types';
 import { logJson } from '../errors';
+import { RULES_VERSION } from '../rules-version';
 
 const DATABASE_URL = process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? null;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -26,15 +28,27 @@ const db = dbEnabled
 interface MemEntry {
   result: AnalysisResult;
   expiresAt: number;
+  rulesVersion: string;
 }
 const mem = new Map<string, MemEntry>();
 
+// In-flight stampede protection: two concurrent requests for the same bank
+// share one Azure + Tavily run. Keyed by (rulesVersion | cacheKey).
+const inflight = new Map<string, Promise<AnalysisResult>>();
+
 function cacheKey(bankName: string): string {
+  // TODO(canonical-entity): this still keys on normalized text. The review
+  // calls for a LEI / canonical-name lookup before hashing — tracked in
+  // docs/DEFERRED.md.
+  return `${RULES_VERSION}|${bankName.trim().toLowerCase()}`;
+}
+
+function normalizedName(bankName: string): string {
   return bankName.trim().toLowerCase();
 }
 
 export async function cacheGet(bankName: string): Promise<AnalysisResult | null> {
-  const key = cacheKey(bankName);
+  const normalized = normalizedName(bankName);
   const now = Date.now();
 
   if (db) {
@@ -42,7 +56,13 @@ export async function cacheGet(bankName: string): Promise<AnalysisResult | null>
       const rows = await db
         .select()
         .from(analyses)
-        .where(and(eq(analyses.cacheKey, key), gt(analyses.expiresAt, new Date(now))))
+        .where(
+          and(
+            eq(analyses.cacheKey, normalized),
+            eq(analyses.rulesVersion, RULES_VERSION),
+            gt(analyses.expiresAt, new Date(now)),
+          ),
+        )
         .orderBy(desc(analyses.createdAt))
         .limit(1);
       if (rows.length === 0) return null;
@@ -57,21 +77,22 @@ export async function cacheGet(bankName: string): Promise<AnalysisResult | null>
     }
   }
 
-  const m = mem.get(key);
-  if (m && m.expiresAt > now) return m.result;
+  const m = mem.get(cacheKey(bankName));
+  if (m && m.expiresAt > now && m.rulesVersion === RULES_VERSION) return m.result;
   return null;
 }
 
 export async function cachePut(bankName: string, result: AnalysisResult): Promise<void> {
-  const key = cacheKey(bankName);
+  const normalized = normalizedName(bankName);
   const now = Date.now();
   const expiresAt = new Date(now + CACHE_TTL_MS);
 
   if (db) {
     try {
       const row: NewAnalysisRow = {
-        cacheKey: key,
+        cacheKey: normalized,
         bankName,
+        rulesVersion: RULES_VERSION,
         profile: result.profile,
         reports: result.reports,
         trace: result.trace ?? null,
@@ -91,7 +112,34 @@ export async function cachePut(bankName: string, result: AnalysisResult): Promis
     }
   }
 
-  mem.set(key, { result, expiresAt: now + CACHE_TTL_MS });
+  mem.set(cacheKey(bankName), {
+    result,
+    expiresAt: now + CACHE_TTL_MS,
+    rulesVersion: RULES_VERSION,
+  });
+}
+
+/**
+ * Coalesce concurrent requests for the same bank into a single agent run.
+ * The first caller runs `compute()`; subsequent callers await the same
+ * promise until it settles. Uncaught errors still reject all waiters.
+ */
+export async function singleflight(
+  bankName: string,
+  compute: () => Promise<AnalysisResult>,
+): Promise<AnalysisResult> {
+  const key = cacheKey(bankName);
+  const existing = inflight.get(key);
+  if (existing) return existing;
+  const p = (async () => {
+    try {
+      return await compute();
+    } finally {
+      inflight.delete(key);
+    }
+  })();
+  inflight.set(key, p);
+  return p;
 }
 
 /**
@@ -99,25 +147,27 @@ export async function cachePut(bankName: string, result: AnalysisResult): Promis
  * first. Used by the History view.
  */
 export async function analysisHistory(bankName: string, limit = 10) {
-  const key = cacheKey(bankName);
+  const normalized = normalizedName(bankName);
   if (db) {
     try {
       const rows = await db
         .select({
           id: analyses.id,
           bankName: analyses.bankName,
+          rulesVersion: analyses.rulesVersion,
           generatedAtIso: analyses.generatedAtIso,
           createdAt: analyses.createdAt,
           profile: analyses.profile,
           reportCount: analyses.reports,
         })
         .from(analyses)
-        .where(eq(analyses.cacheKey, key))
+        .where(eq(analyses.cacheKey, normalized))
         .orderBy(desc(analyses.createdAt))
         .limit(limit);
       return rows.map((r) => ({
         id: r.id,
         bankName: r.bankName,
+        rulesVersion: r.rulesVersion,
         generatedAtIso: r.generatedAtIso,
         createdAtIso: r.createdAt.toISOString(),
         assetSizeTier: r.profile.assetSizeTier,
@@ -152,3 +202,5 @@ export async function pruneExpired(): Promise<number> {
     return 0;
   }
 }
+
+export { RULES_VERSION };

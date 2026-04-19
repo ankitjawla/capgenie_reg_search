@@ -11,23 +11,43 @@ const webSearchInputSchema = z.object({
   query: z.string().describe('The Bing search query (plain English, not site: filters).'),
 });
 
+export interface WebSearchToolOpts {
+  trace: SearchStep[];
+  agentLabel?: string;
+  // Shared cache across all researcher nodes in one run so the same query
+  // fired by US-researcher and EU-researcher only costs one Tavily credit.
+  searchCache?: Map<string, Awaited<ReturnType<typeof bingWebSearch>>>;
+  signal?: AbortSignal;
+}
+
 /**
- * Build a web_search tool bound to a trace accumulator so every query + result
- * is captured for the UI's "research transcript".
+ * Build a web_search tool bound to a trace accumulator + optional shared
+ * query cache. Every query + result is captured for the UI's
+ * "research transcript".
  */
-export function makeWebSearchTool(trace: SearchStep[], agentLabel = 'researcher') {
+export function makeWebSearchTool(opts: WebSearchToolOpts) {
+  const { trace, agentLabel = 'researcher', searchCache, signal } = opts;
   return tool(
     async (input) => {
       const { query } = input as z.infer<typeof webSearchInputSchema>;
+      const normalized = query.trim().toLowerCase();
       try {
-        const results = await bingWebSearch(query);
-        trace.push({ query, agent: agentLabel, results });
-        // Compact payload so the model doesn't spend tokens on noise.
+        // Per-run cross-jurisdiction dedup: identical queries don't re-hit
+        // Tavily. Tag the trace entry so the UI can still see a researcher
+        // "ran" the query.
+        let results = searchCache?.get(normalized);
+        if (results) {
+          trace.push({ query, agent: `${agentLabel} (cache)`, results });
+        } else {
+          results = await bingWebSearch(query, { signal });
+          searchCache?.set(normalized, results);
+          trace.push({ query, agent: agentLabel, results });
+        }
         return JSON.stringify(
           results.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
         );
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Bing search failed.';
+        const message = err instanceof Error ? err.message : 'Web search failed.';
         trace.push({ query, agent: agentLabel, results: [] });
         return JSON.stringify({ error: message });
       }
@@ -35,7 +55,7 @@ export function makeWebSearchTool(trace: SearchStep[], agentLabel = 'researcher'
     {
       name: 'web_search',
       description:
-        'Search the web via Bing. Use focused, primary-source-oriented queries (regulator sites, annual reports, investor relations pages). Avoid repeating the same query twice.',
+        'Search the web. Use focused, primary-source-oriented queries (regulator sites, annual reports, investor relations pages). Avoid repeating the same query twice — results are cached across researchers within a run.',
       schema: webSearchInputSchema,
     },
   );
