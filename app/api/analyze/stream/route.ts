@@ -1,7 +1,8 @@
 import { extractBankProfileWithTrace, type StreamEvent } from '@/lib/llm';
 import { applyRules } from '@/lib/rules';
 import type { AnalysisResult } from '@/lib/types';
-import { classifyLLMError } from '@/lib/errors';
+import { classifyLLMError, logJson, newRequestId } from '@/lib/errors';
+import { getClientKey, rateLimit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const maxDuration = 180;
@@ -19,18 +20,41 @@ type ServerEvent =
   | { type: 'error'; error: string; kind: string };
 
 export async function POST(req: Request) {
+  const requestId = newRequestId();
+  const clientKey = getClientKey(req);
+  const limit = rateLimit(`stream:${clientKey}`, { capacity: 5, refillPerSec: 5 / 60 });
+  if (!limit.allowed) {
+    return Response.json(
+      { error: 'Rate limit exceeded. Try again shortly.', kind: 'rate_limit', requestId },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(limit.retryAfterSec),
+          'X-Request-Id': requestId,
+        },
+      },
+    );
+  }
+
   let bankName: string | undefined;
   try {
     const body = (await req.json()) as { bankName?: string };
     bankName = body.bankName?.trim();
   } catch {
-    return Response.json({ error: 'Invalid JSON body.' }, { status: 400 });
+    return Response.json(
+      { error: 'Invalid JSON body.', requestId },
+      { status: 400, headers: { 'X-Request-Id': requestId } },
+    );
   }
 
   if (!bankName) {
-    return Response.json({ error: 'bankName is required.' }, { status: 400 });
+    return Response.json(
+      { error: 'bankName is required.', requestId },
+      { status: 400, headers: { 'X-Request-Id': requestId } },
+    );
   }
   const name = bankName;
+  logJson({ level: 'info', requestId, route: '/api/analyze/stream', msg: 'stream.start', bankName: name });
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -92,6 +116,7 @@ export async function POST(req: Request) {
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
+      'X-Request-Id': requestId,
     },
   });
 }

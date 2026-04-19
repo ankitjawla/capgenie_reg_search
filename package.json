@@ -9,7 +9,10 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "ui-check": "playwright test --config=playwright.config.ts",
+    "ui-check:prod": "UI_CHECK_URL=https://capgenie-reg-search.vercel.app playwright test --config=playwright.config.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@langchain/core": "^1.1.40",
@@ -20,10 +23,14 @@
     "next": "14.2.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-error-boundary": "^6.1.1",
     "recharts": "^3.8.1",
+    "sonner": "^2.0.7",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.2",
+    "@playwright/test": "^1.59.1",
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",

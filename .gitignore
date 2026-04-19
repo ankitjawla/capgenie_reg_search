@@ -14,3 +14,7 @@ next-env.d.ts
 tsconfig.tsbuildinfo
 *.tsbuildinfo
 .claude/
+playwright-report/
+test-results/
+tests/ui-check/snapshots/
+tests/ui-check/report.json

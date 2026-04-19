@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript type check
+        run: npm run typecheck
+      - name: Lint (Next.js)
+        run: npm run lint
+      - name: Unit tests (vitest)
+        run: npm test
+      - name: Production build
+        run: npm run build
+        env:
+          # Build doesn't need real keys; just needs the env shape so Next.js
+          # doesn't strip required APIs.
+          AZURE_OPENAI_API_KEY: dummy
+          AZURE_OPENAI_ENDPOINT: https://example.azure.com
+          AZURE_OPENAI_DEPLOYMENT: gpt-4o
+          TAVILY_API_KEY: dummy
+
+  ui-check:
+    # Runs the Playwright UI Health Check agent against the live production
+    # deployment after CI passes. Skipped on PRs since prod is unaffected.
+    if: github.ref == 'refs/heads/main'
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Wait for Vercel deploy to finish
+        run: sleep 90
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Run UI Health Check against production
+        run: npm run ui-check:prod
+      - name: Upload report + screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-check-report
+          path: |
+            tests/ui-check/report.json
+            tests/ui-check/snapshots/
+          retention-days: 14

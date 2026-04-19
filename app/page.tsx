@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 import BankForm from '@/components/BankForm';
+import Hero from '@/components/Hero';
+import Footer from '@/components/Footer';
+import { SkeletonProfile, SkeletonReports } from '@/components/Skeletons';
 import ProfileCard from '@/components/ProfileCard';
 import EditableProfileForm from '@/components/EditableProfileForm';
 import ReportsList from '@/components/ReportsList';
@@ -185,8 +190,24 @@ export default function Home() {
               setProgress((p) => [...p, { kind: 'info', text: evt.message }]);
             } else if (evt.type === 'result') {
               setApiResult(evt.result);
+              if (evt.result.fromCache) {
+                toast.info('Loaded from cache', {
+                  description: 'Saved an Azure + Tavily round-trip.',
+                });
+              } else {
+                toast.success('Analysis complete', {
+                  description: `${evt.result.reports.length} report${
+                    evt.result.reports.length === 1 ? '' : 's'
+                  } across ${
+                    new Set(evt.result.reports.map((r) => r.jurisdiction)).size
+                  } jurisdiction${
+                    new Set(evt.result.reports.map((r) => r.jurisdiction)).size === 1 ? '' : 's'
+                  }.`,
+                });
+              }
             } else if (evt.type === 'error') {
               setError(evt.error);
+              toast.error('Analysis failed', { description: evt.error });
             }
           } catch {
             // ignore malformed SSE chunk
@@ -203,10 +224,16 @@ export default function Home() {
   function handleSaveEdits(next: BankProfile) {
     setEditedProfile(next);
     setEditMode(false);
+    toast.success('Profile updated', {
+      description: 'Reports recomputed locally — no extra API call.',
+    });
   }
   function handleResetEdits() {
     setEditedProfile(null);
     setEditMode(false);
+    toast.info('Reverted to research', {
+      description: 'Showing the deep agent\u2019s original profile.',
+    });
   }
   function handleClearPersisted() {
     clearPersistedAnalysis();
@@ -216,6 +243,7 @@ export default function Home() {
     setBankName('');
     setError(null);
     setProgress([]);
+    toast('Saved analysis cleared');
   }
   async function handleCopyShareLink() {
     if (!bankName) return;
@@ -227,6 +255,9 @@ export default function Home() {
       await navigator.clipboard.writeText(url);
       setShareCopied(true);
       setTimeout(() => setShareCopied(false), 1500);
+      toast.success('Share link copied', {
+        description: 'Open it in another tab to load the same view.',
+      });
     } catch {
       window.prompt('Copy this share link:', url);
     }
@@ -271,9 +302,17 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm no-print dark:border-slate-700 dark:bg-slate-900">
-        <BankForm onSubmit={runAnalysis} loading={loading} />
-      </div>
+      {!profile && !loading && progress.length === 0 && (
+        <div className="no-print">
+          <Hero onSubmit={runAnalysis} loading={loading} />
+        </div>
+      )}
+
+      {(profile || loading || progress.length > 0) && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm no-print dark:border-slate-700 dark:bg-slate-900">
+          <BankForm onSubmit={runAnalysis} loading={loading} />
+        </div>
+      )}
 
       {(loading || progress.length > 0) && (
         <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_360px]">
@@ -324,8 +363,23 @@ export default function Home() {
         </div>
       )}
 
-      {profile && (
+      {/* Skeleton placeholders while the agent is still working and we have
+          no profile yet. Skeleton goes away as soon as `profile` shows up. */}
+      {loading && !profile && (
         <div className="mt-8 space-y-6">
+          <SkeletonProfile />
+          <SkeletonReports />
+        </div>
+      )}
+
+      <AnimatePresence>{profile && (
+        <motion.div
+          className="mt-8 space-y-6"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.35 }}
+          key={apiResult?.generatedAtIso ?? 'profile'}>
           {warnings && warnings.length > 0 && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800/60 dark:bg-amber-900/20 dark:text-amber-100">
               <div className="font-semibold">Notes</div>
@@ -433,15 +487,16 @@ export default function Home() {
             <FollowupChat profile={profile} reports={reports} />
           </div>
 
-          <footer className="pt-2 text-xs text-slate-400 dark:text-slate-500">
+          <p className="pt-2 text-xs text-slate-400 dark:text-slate-500">
             {apiResult
               ? `Generated ${new Date(apiResult.generatedAtIso).toLocaleString()}`
               : 'Local recompute'}
             {apiResult?.fromCache ? ' · cached' : ''} · This tool is advisory only. Verify applicability with your
             compliance team before filing.
-          </footer>
-        </div>
+          </p>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       {trace && (
         <ResearchTranscript trace={trace} open={transcriptOpen} onClose={() => setTranscriptOpen(false)} />
@@ -467,6 +522,8 @@ export default function Home() {
         }}
         onClearSaved={handleClearPersisted}
       />
+
+      <Footer />
 
       {/* Sticky in-page nav — only when there are results */}
       {profile && (

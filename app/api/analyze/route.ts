@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { extractBankProfileWithTrace } from '@/lib/llm';
 import { applyRules } from '@/lib/rules';
 import type { AnalysisResult } from '@/lib/types';
-import { classifyLLMError } from '@/lib/errors';
+import { classifyLLMError, logJson, newRequestId } from '@/lib/errors';
+import { getClientKey, rateLimit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -15,22 +16,50 @@ function cacheKey(bankName: string): string {
 }
 
 export async function POST(req: Request) {
+  const requestId = newRequestId();
+  const clientKey = getClientKey(req);
+  const limit = rateLimit(`analyze:${clientKey}`, { capacity: 5, refillPerSec: 5 / 60 });
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded. Try again shortly.', kind: 'rate_limit', requestId },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(limit.retryAfterSec),
+          'X-Request-Id': requestId,
+        },
+      },
+    );
+  }
+
   let bankName: string | undefined;
   try {
     const body = (await req.json()) as { bankName?: string };
     bankName = body.bankName?.trim();
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Invalid JSON body.', requestId },
+      { status: 400, headers: { 'X-Request-Id': requestId } },
+    );
   }
 
   if (!bankName) {
-    return NextResponse.json({ error: 'bankName is required.' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'bankName is required.', requestId },
+      { status: 400, headers: { 'X-Request-Id': requestId } },
+    );
   }
+
+  logJson({ level: 'info', requestId, route: '/api/analyze', msg: 'analyze.start', bankName });
 
   const key = cacheKey(bankName);
   const cached = cache.get(key);
   if (cached && cached.expiresAt > Date.now()) {
-    return NextResponse.json({ ...cached.result, fromCache: true });
+    logJson({ level: 'info', requestId, route: '/api/analyze', msg: 'analyze.cache_hit', bankName });
+    return NextResponse.json(
+      { ...cached.result, fromCache: true, requestId },
+      { headers: { 'X-Request-Id': requestId } },
+    );
   }
 
   try {
@@ -59,10 +88,31 @@ export async function POST(req: Request) {
       trace,
     };
     cache.set(key, { result, expiresAt: Date.now() + CACHE_TTL_MS });
-    return NextResponse.json(result);
+    logJson({
+      level: 'info',
+      requestId,
+      route: '/api/analyze',
+      msg: 'analyze.complete',
+      bankName,
+      reportCount: reports.length,
+    });
+    return NextResponse.json(
+      { ...result, requestId },
+      { headers: { 'X-Request-Id': requestId } },
+    );
   } catch (err: unknown) {
-    console.error('analyze route error', err);
     const [payload, status] = classifyLLMError(err);
-    return NextResponse.json(payload, { status });
+    logJson({
+      level: 'error',
+      requestId,
+      route: '/api/analyze',
+      msg: 'analyze.error',
+      kind: payload.kind,
+      err: payload.error,
+    });
+    return NextResponse.json(
+      { ...payload, requestId },
+      { status, headers: { 'X-Request-Id': requestId } },
+    );
   }
 }

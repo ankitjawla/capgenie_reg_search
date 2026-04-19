@@ -14,6 +14,27 @@ export type ErrorKind =
   | 'config'
   | 'internal';
 
+export function newRequestId(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return `r_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
+}
+
+export interface LogPayload {
+  level: 'info' | 'warn' | 'error';
+  requestId?: string;
+  route?: string;
+  msg: string;
+  [k: string]: unknown;
+}
+
+export function logJson(p: LogPayload): void {
+  // Vercel + most log shippers parse JSON lines automatically.
+  const line = JSON.stringify({ ts: new Date().toISOString(), ...p });
+  if (p.level === 'error') console.error(line);
+  else if (p.level === 'warn') console.warn(line);
+  else console.log(line);
+}
+
 export interface ErrorPayload {
   error: string;
   kind: ErrorKind;

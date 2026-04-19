@@ -5,7 +5,8 @@
 import { AzureChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
 import type { BankProfile, ReportRecommendation } from '@/lib/types';
-import { classifyLLMError } from '@/lib/errors';
+import { classifyLLMError, logJson, newRequestId } from '@/lib/errors';
+import { getClientKey, rateLimit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -69,19 +70,37 @@ ${reportLines}
 }
 
 export async function POST(req: Request) {
+  const requestId = newRequestId();
+  const clientKey = getClientKey(req);
+  // Chat is cheaper than analyze — allow 20 messages/minute.
+  const limit = rateLimit(`chat:${clientKey}`, { capacity: 20, refillPerSec: 20 / 60 });
+  if (!limit.allowed) {
+    return Response.json(
+      { error: 'Rate limit exceeded. Try again shortly.', kind: 'rate_limit', requestId },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(limit.retryAfterSec), 'X-Request-Id': requestId },
+      },
+    );
+  }
+
   let body: Body;
   try {
     body = (await req.json()) as Body;
   } catch {
-    return Response.json({ error: 'Invalid JSON body.' }, { status: 400 });
+    return Response.json(
+      { error: 'Invalid JSON body.', requestId },
+      { status: 400, headers: { 'X-Request-Id': requestId } },
+    );
   }
 
   if (!body?.profile || !Array.isArray(body?.reports) || !body?.question?.trim()) {
     return Response.json(
-      { error: 'profile, reports[], and question are required.' },
-      { status: 400 },
+      { error: 'profile, reports[], and question are required.', requestId },
+      { status: 400, headers: { 'X-Request-Id': requestId } },
     );
   }
+  logJson({ level: 'info', requestId, route: '/api/chat', msg: 'chat.start', q: body.question.slice(0, 80) });
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -148,6 +167,7 @@ export async function POST(req: Request) {
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
+      'X-Request-Id': requestId,
     },
   });
 }
