@@ -26,13 +26,16 @@ export interface ExtractResult {
 // Human-readable label per node name; used to emit `info` events when
 // LangGraph fires `on_chain_start` for a node.
 const NODE_LABELS: Record<string, string> = {
-  planner: 'Planning jurisdictions and resolving bank identity…',
+  planner: 'Planning jurisdictions and resolving entity identity…',
   researchUS: 'Researching United States presence…',
   researchUK: 'Researching United Kingdom presence…',
   researchEU: 'Researching European Union presence…',
   researchIN: 'Researching India presence…',
+  researchCA: 'Researching Canada presence…',
+  researchSG: 'Researching Singapore presence…',
+  researchHK: 'Researching Hong Kong presence…',
   verifier: 'Cross-verifying findings across jurisdictions…',
-  synthesizer: 'Synthesizing the verified BankProfile…',
+  synthesizer: 'Synthesizing the verified profile…',
 };
 
 export async function extractBankProfile(

@@ -45,6 +45,9 @@ function jurisdictionContainsCountry(j: Jurisdiction, country: string): boolean 
   if (j === 'US') return c === 'US' || c === 'USA';
   if (j === 'UK') return c === 'GB' || c === 'UK';
   if (j === 'IN') return c === 'IN' || c === 'IND';
+  if (j === 'CA') return c === 'CA' || c === 'CAN';
+  if (j === 'SG') return c === 'SG' || c === 'SGP';
+  if (j === 'HK') return c === 'HK' || c === 'HKG';
   if (j === 'EU') {
     const eu = [
       'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR',
@@ -458,16 +461,119 @@ function indiaRules(profile: BankProfile): ReportRecommendation[] {
 }
 
 // ============================================================
+// CANADA RULES
+// ============================================================
+function caRules(profile: BankProfile): ReportRecommendation[] {
+  const out: ReportRecommendation[] = [];
+  const p = presenceFor(profile, 'CA');
+  if (!p) return out;
+  const assetsB = presenceAssetsUsdB(profile, 'CA');
+  out.push(rec('CA_A2_A1', 'Federally regulated deposit-taking institution in Canada — monthly A1/A2 balance-sheet returns.'));
+  out.push(rec('CA_CAR', 'OSFI-regulated bank — quarterly Capital Adequacy Return under CAR Guideline.'));
+  out.push(rec('CA_LRR', 'OSFI Leverage Requirements — quarterly leverage ratio return.'));
+  if (assetsB >= 5) {
+    out.push(rec('CA_LCR_NSFR', 'Canadian bank with meaningful size — LCR/NSFR liquidity returns under OSFI Liquidity Adequacy Requirements.'));
+  }
+  out.push(rec('CA_FINTRAC_LCTR', 'All Canadian banks must file LCTRs + STRs to FINTRAC under the PCMLTFA.'));
+  return out;
+}
+
+// ============================================================
+// SINGAPORE RULES
+// ============================================================
+function sgRules(profile: BankProfile): ReportRecommendation[] {
+  const out: ReportRecommendation[] = [];
+  const p = presenceFor(profile, 'SG');
+  if (!p) return out;
+  const assetsB = presenceAssetsUsdB(profile, 'SG');
+  out.push(rec('SG_MAS_610', 'MAS-licensed bank in Singapore — monthly Notice 610 statistical returns.'));
+  out.push(rec('SG_MAS_637', 'MAS-licensed bank — Notice 637 quarterly capital adequacy reporting (Basel III).'));
+  out.push(rec('SG_MAS_LCR', 'MAS-licensed bank — Notice 649 daily/monthly liquidity reporting.', assetsB >= 5 ? 'high' : 'medium'));
+  if (profile.activities.includes('commercial_lending')) {
+    out.push(rec('SG_MAS_757', 'Bank lends in Singapore dollars — Notice 757 SGD lending-to-non-resident-FI rules apply.', 'medium'));
+  }
+  out.push(rec('SG_STR', 'All SG-licensed banks file STRs to STRO/CAD under the CDSA.'));
+  return out;
+}
+
+// ============================================================
+// HONG KONG RULES
+// ============================================================
+function hkRules(profile: BankProfile): ReportRecommendation[] {
+  const out: ReportRecommendation[] = [];
+  const p = presenceFor(profile, 'HK');
+  if (!p) return out;
+  out.push(rec('HK_MA_BS1', 'Authorized institution in HK — monthly MA(BS)1 balance sheet return to HKMA.'));
+  out.push(rec('HK_CAR', 'HKMA-authorized institution — quarterly CAR under the Banking (Capital) Rules.'));
+  out.push(rec('HK_LMR', 'HKMA-authorized institution — monthly liquidity reporting under the Banking (Liquidity) Rules.'));
+  out.push(rec('HK_DISCLOSURE', 'HK Banking (Disclosure) Rules — semi-annual public disclosures (Pillar 3 equivalent).'));
+  out.push(rec('HK_JFIU', 'Event-driven STR filing to the Joint Financial Intelligence Unit under OSCO.'));
+  return out;
+}
+
+// ============================================================
+// INSURANCE RULES (entityType === 'insurer')
+// ============================================================
+function insuranceRules(profile: BankProfile): ReportRecommendation[] {
+  const out: ReportRecommendation[] = [];
+  const hasUS = presenceFor(profile, 'US');
+  const hasEU = presenceFor(profile, 'EU');
+  const hasIN = presenceFor(profile, 'IN');
+  if (hasUS) {
+    out.push(rec('US_NAIC_ANNUAL', 'US-licensed insurer — annual NAIC statutory statement.'));
+    out.push(rec('US_NAIC_ORSA', 'US-licensed insurer above NAIC premium thresholds — annual ORSA summary.', 'medium'));
+  }
+  if (hasEU) {
+    out.push(rec('EU_SOLVENCY_II_QRT', 'EU-authorized insurer — quarterly Solvency II QRT submission.'));
+    out.push(rec('EU_SOLVENCY_II_SFCR', 'EU-authorized insurer — annual SFCR public report + RSR confidential report.'));
+  }
+  if (hasIN) {
+    out.push(rec('IN_IRDAI_PUBLIC', 'IRDAI-licensed insurer — quarterly / annual public disclosures.'));
+  }
+  return out;
+}
+
+// ============================================================
+// CRYPTO / DIGITAL-ASSET RULES (entityType === 'crypto_firm')
+// ============================================================
+function cryptoRules(profile: BankProfile): ReportRecommendation[] {
+  const out: ReportRecommendation[] = [];
+  const hasUS = presenceFor(profile, 'US');
+  const hasEU = presenceFor(profile, 'EU');
+  if (hasEU) {
+    out.push(rec('EU_MICA_PERIODIC', 'EU-authorized CASP / ART-EMT issuer — ongoing MiCA periodic reporting.'));
+    if (profile.category === 'stablecoin_issuer' || profile.activities.includes('crypto_assets')) {
+      out.push(rec('EU_MICA_ART_EMT', 'Stablecoin / crypto-asset issuer — MiCA Titles III/IV whitepaper + reserve disclosures.', 'medium'));
+    }
+  }
+  if (hasUS) {
+    out.push(rec('US_NYDFS_BITLICENSE', 'NYDFS BitLicense holder — annual financial + transaction-monitoring certifications.', 'medium'));
+    out.push(rec('US_FINCEN_MSB', 'Most crypto firms are MSBs under 31 CFR §1022 — event-driven SAR / CTR / Form 8300 filings.'));
+  }
+  return out;
+}
+
+// ============================================================
 // PUBLIC ENTRY POINT
 // ============================================================
 export function applyRules(profile: BankProfile): ReportRecommendation[] {
-  const all = [
-    ...usRules(profile),
-    ...ukRules(profile),
-    ...euRules(profile),
-    ...indiaRules(profile),
-  ];
-
+  const entity = profile.entityType ?? 'bank';
+  let all: ReportRecommendation[];
+  if (entity === 'insurer') {
+    all = insuranceRules(profile);
+  } else if (entity === 'crypto_firm') {
+    all = cryptoRules(profile);
+  } else {
+    all = [
+      ...usRules(profile),
+      ...ukRules(profile),
+      ...euRules(profile),
+      ...indiaRules(profile),
+      ...caRules(profile),
+      ...sgRules(profile),
+      ...hkRules(profile),
+    ];
+  }
   // De-duplicate by id, preferring the higher-confidence entry.
   const byId = new Map<string, ReportRecommendation>();
   for (const r of all) {

@@ -14,13 +14,16 @@ interface NodeDef {
 }
 
 const NODES: NodeDef[] = [
-  { id: 'planner', label: 'Planner', matchers: ['Planning jurisdictions'], column: 0, row: 1 },
+  { id: 'planner', label: 'Planner', matchers: ['Planning jurisdictions'], column: 0, row: 3 },
   { id: 'researchUS', label: '🇺🇸 US', matchers: ['Researching United States'], column: 1, row: 0 },
   { id: 'researchUK', label: '🇬🇧 UK', matchers: ['Researching United Kingdom'], column: 1, row: 1 },
   { id: 'researchEU', label: '🇪🇺 EU', matchers: ['Researching European Union'], column: 1, row: 2 },
   { id: 'researchIN', label: '🇮🇳 IN', matchers: ['Researching India'], column: 1, row: 3 },
-  { id: 'verifier', label: 'Verifier', matchers: ['Cross-verifying'], column: 2, row: 1 },
-  { id: 'synthesizer', label: 'Synthesizer', matchers: ['Synthesizing the verified'], column: 3, row: 1 },
+  { id: 'researchCA', label: '🇨🇦 CA', matchers: ['Researching Canada'], column: 1, row: 4 },
+  { id: 'researchSG', label: '🇸🇬 SG', matchers: ['Researching Singapore'], column: 1, row: 5 },
+  { id: 'researchHK', label: '🇭🇰 HK', matchers: ['Researching Hong Kong'], column: 1, row: 6 },
+  { id: 'verifier', label: 'Verifier', matchers: ['Cross-verifying'], column: 2, row: 3 },
+  { id: 'synthesizer', label: 'Synthesizer', matchers: ['Synthesizing the verified'], column: 3, row: 3 },
 ];
 
 const EDGES: Array<[string, string]> = [
@@ -28,10 +31,16 @@ const EDGES: Array<[string, string]> = [
   ['planner', 'researchUK'],
   ['planner', 'researchEU'],
   ['planner', 'researchIN'],
+  ['planner', 'researchCA'],
+  ['planner', 'researchSG'],
+  ['planner', 'researchHK'],
   ['researchUS', 'verifier'],
   ['researchUK', 'verifier'],
   ['researchEU', 'verifier'],
   ['researchIN', 'verifier'],
+  ['researchCA', 'verifier'],
+  ['researchSG', 'verifier'],
+  ['researchHK', 'verifier'],
   ['verifier', 'synthesizer'],
 ];
 
@@ -51,7 +60,7 @@ export default function ProgressGraph({ infoLog, done }: Props) {
 
   // Place nodes in a grid that mirrors the architecture.
   const COL_X = [40, 200, 360, 500];
-  const ROW_Y = [20, 80, 140, 200];
+  const ROW_Y = [20, 70, 120, 170, 220, 270, 320];
 
   function nodeAt(id: string) {
     const n = NODES.find((x) => x.id === id);
@@ -69,7 +78,7 @@ export default function ProgressGraph({ infoLog, done }: Props) {
           {activated.size}/{NODES.length} nodes · {done ? 'done' : 'running'}
         </span>
       </div>
-      <svg viewBox="0 0 580 240" className="w-full text-slate-300 dark:text-slate-600">
+      <svg viewBox="0 0 580 370" className="w-full text-slate-300 dark:text-slate-600">
         {/* Edges */}
         <g stroke="currentColor" strokeWidth="1.5" fill="none">
           {EDGES.map(([a, b], i) => {

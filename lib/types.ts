@@ -1,6 +1,8 @@
 // Shared type definitions for the bank-profile -> reports pipeline.
 
-export type Jurisdiction = 'US' | 'UK' | 'EU' | 'IN';
+export type Jurisdiction = 'US' | 'UK' | 'EU' | 'IN' | 'CA' | 'SG' | 'HK';
+
+export type EntityType = 'bank' | 'insurer' | 'crypto_firm';
 
 export type BankCategory =
   | 'commercial_bank'
@@ -14,6 +16,13 @@ export type BankCategory =
   | 'payments_bank'
   | 'nbfc'
   | 'building_society'
+  // Non-bank entity categories (used when entityType !== 'bank')
+  | 'life_insurer'
+  | 'property_casualty_insurer'
+  | 'reinsurer'
+  | 'crypto_exchange'
+  | 'crypto_custodian'
+  | 'stablecoin_issuer'
   | 'other';
 
 export type AssetSizeTier =
@@ -60,6 +69,9 @@ export interface JurisdictionPresence {
 export interface BankProfile {
   legalName: string;
   commonName?: string;
+  // What kind of entity — bank (default), insurer, or crypto firm.
+  // Rules engine forks on this; the deep-agent's planner detects it.
+  entityType?: EntityType;
   // Country of headquarters (ISO 3166-1 alpha-2 like "US", "GB", "IN", "DE")
   hqCountry?: string;
   // Approximate global consolidated assets in USD billions
@@ -73,7 +85,7 @@ export interface BankProfile {
   isFDICInsured?: boolean;
   hasInsuranceSubsidiary?: boolean;
   hasBrokerDealerSubsidiary?: boolean;
-  // List of jurisdictions where the bank has operations
+  // List of jurisdictions where the entity has operations
   presence: JurisdictionPresence[];
   activities: Activity[];
   // Free text describing why the model classified the bank this way

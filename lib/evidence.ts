@@ -14,6 +14,9 @@ const JURISDICTION_LABEL: Record<Jurisdiction, string> = {
   UK: 'United Kingdom',
   EU: 'European Union',
   IN: 'India',
+  CA: 'Canada',
+  SG: 'Singapore',
+  HK: 'Hong Kong',
 };
 
 const TIER_LABEL: Record<string, string> = {
@@ -52,7 +55,7 @@ export function resolveEvidence(
     seen.add(raw);
 
     // presence.<JUR>
-    const presenceMatch = raw.match(/^presence\.(US|UK|EU|IN)$/);
+    const presenceMatch = raw.match(/^presence\.(US|UK|EU|IN|CA|SG|HK)$/);
     if (presenceMatch) {
       const j = presenceMatch[1] as Jurisdiction;
       out.push({
@@ -64,7 +67,7 @@ export function resolveEvidence(
     }
 
     // presence.<JUR>.entityType / isFBO / jurisdictionAssetsUsdB
-    const subFieldMatch = raw.match(/^presence\.(US|UK|EU|IN)\.(\w+)$/);
+    const subFieldMatch = raw.match(/^presence\.(US|UK|EU|IN|CA|SG|HK)\.(\w+)$/);
     if (subFieldMatch) {
       const j = subFieldMatch[1] as Jurisdiction;
       const key = subFieldMatch[2];

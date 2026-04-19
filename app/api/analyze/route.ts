@@ -4,16 +4,10 @@ import { applyRules } from '@/lib/rules';
 import type { AnalysisResult } from '@/lib/types';
 import { classifyLLMError, logJson, newRequestId } from '@/lib/errors';
 import { getClientKey, rateLimit } from '@/lib/rate-limit';
+import { cacheGet, cachePut } from '@/lib/db';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
-
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const cache = new Map<string, { result: AnalysisResult; expiresAt: number }>();
-
-function cacheKey(bankName: string): string {
-  return bankName.trim().toLowerCase();
-}
 
 export async function POST(req: Request) {
   const requestId = newRequestId();
@@ -52,12 +46,11 @@ export async function POST(req: Request) {
 
   logJson({ level: 'info', requestId, route: '/api/analyze', msg: 'analyze.start', bankName });
 
-  const key = cacheKey(bankName);
-  const cached = cache.get(key);
-  if (cached && cached.expiresAt > Date.now()) {
+  const cached = await cacheGet(bankName);
+  if (cached) {
     logJson({ level: 'info', requestId, route: '/api/analyze', msg: 'analyze.cache_hit', bankName });
     return NextResponse.json(
-      { ...cached.result, fromCache: true, requestId },
+      { ...cached, fromCache: true, requestId },
       { headers: { 'X-Request-Id': requestId } },
     );
   }
@@ -87,7 +80,7 @@ export async function POST(req: Request) {
       warnings: warnings.length ? warnings : undefined,
       trace,
     };
-    cache.set(key, { result, expiresAt: Date.now() + CACHE_TTL_MS });
+    await cachePut(bankName, result);
     logJson({
       level: 'info',
       requestId,

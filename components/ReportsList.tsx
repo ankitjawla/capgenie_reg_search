@@ -10,6 +10,9 @@ const JURISDICTION_LABEL: Record<Jurisdiction, string> = {
   UK: 'United Kingdom',
   EU: 'European Union',
   IN: 'India',
+  CA: 'Canada',
+  SG: 'Singapore',
+  HK: 'Hong Kong',
 };
 
 const FREQ_LABEL: Record<string, string> = {
@@ -334,12 +337,12 @@ function compareBy(a: ReportRecommendation, b: ReportRecommendation, key: SortKe
 }
 
 function jurisdictionOrder(j: Jurisdiction): number {
-  return { US: 1, UK: 2, EU: 3, IN: 4 }[j];
+  return { US: 1, UK: 2, EU: 3, IN: 4, CA: 5, SG: 6, HK: 7 }[j];
 }
 
 function groupOrderFor(groupBy: GroupKey, keys: string[]): string[] {
   if (groupBy === 'jurisdiction') {
-    const order: Jurisdiction[] = ['US', 'UK', 'EU', 'IN'];
+    const order: Jurisdiction[] = ['US', 'UK', 'EU', 'IN', 'CA', 'SG', 'HK'];
     return order.filter((j) => keys.includes(j));
   }
   if (groupBy === 'frequency') {

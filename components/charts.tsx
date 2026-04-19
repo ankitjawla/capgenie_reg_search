@@ -19,6 +19,9 @@ const JURISDICTION_COLORS: Record<Jurisdiction, string> = {
   UK: '#8b5cf6',
   EU: '#06b6d4',
   IN: '#f59e0b',
+  CA: '#ef4444',
+  SG: '#ec4899',
+  HK: '#10b981',
 };
 
 const FREQUENCY_ORDER = [

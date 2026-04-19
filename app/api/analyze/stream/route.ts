@@ -3,16 +3,10 @@ import { applyRules } from '@/lib/rules';
 import type { AnalysisResult } from '@/lib/types';
 import { classifyLLMError, logJson, newRequestId } from '@/lib/errors';
 import { getClientKey, rateLimit } from '@/lib/rate-limit';
+import { cacheGet, cachePut } from '@/lib/db';
 
 export const runtime = 'nodejs';
 export const maxDuration = 180;
-
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const cache = new Map<string, { result: AnalysisResult; expiresAt: number }>();
-
-function cacheKey(bankName: string): string {
-  return bankName.trim().toLowerCase();
-}
 
 type ServerEvent =
   | StreamEvent
@@ -63,11 +57,10 @@ export async function POST(req: Request) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(evt)}\n\n`));
       };
 
-      const key = cacheKey(name);
-      const cached = cache.get(key);
-      if (cached && cached.expiresAt > Date.now()) {
+      const cached = await cacheGet(name);
+      if (cached) {
         send({ type: 'info', message: 'Returning cached result.' });
-        send({ type: 'result', result: { ...cached.result, fromCache: true } });
+        send({ type: 'result', result: { ...cached, fromCache: true } });
         controller.close();
         return;
       }
@@ -98,7 +91,7 @@ export async function POST(req: Request) {
           warnings: warnings.length ? warnings : undefined,
           trace,
         };
-        cache.set(key, { result, expiresAt: Date.now() + CACHE_TTL_MS });
+        await cachePut(name, result);
         send({ type: 'result', result });
       } catch (err: unknown) {
         console.error('stream route error', err);

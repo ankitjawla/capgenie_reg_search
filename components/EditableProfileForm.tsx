@@ -22,6 +22,12 @@ const CATEGORIES: BankCategory[] = [
   'payments_bank',
   'nbfc',
   'building_society',
+  'life_insurer',
+  'property_casualty_insurer',
+  'reinsurer',
+  'crypto_exchange',
+  'crypto_custodian',
+  'stablecoin_issuer',
   'other',
 ];
 
@@ -36,7 +42,7 @@ const TIERS: { value: AssetSizeTier; label: string }[] = [
   { value: 'unknown', label: 'Unknown' },
 ];
 
-const JURISDICTIONS: Jurisdiction[] = ['US', 'UK', 'EU', 'IN'];
+const JURISDICTIONS: Jurisdiction[] = ['US', 'UK', 'EU', 'IN', 'CA', 'SG', 'HK'];
 
 const ACTIVITIES: Activity[] = [
   'retail_deposits',

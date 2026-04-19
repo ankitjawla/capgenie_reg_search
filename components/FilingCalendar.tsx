@@ -34,6 +34,9 @@ function monthsForReport(r: ReportRecommendation): number[] {
       if (j === 'EU') return [1]; // FINREP annual ≈ Feb
       if (j === 'UK') return [1];
       if (j === 'IN') return [5]; // Jun (fiscal-year-end banks)
+      if (j === 'CA') return [3]; // OSFI Apr
+      if (j === 'SG') return [2]; // MAS Mar
+      if (j === 'HK') return [3]; // HKMA Apr
       return [2]; // default US annual reports
     }
     case 'event_driven':

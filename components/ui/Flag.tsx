@@ -5,6 +5,9 @@ const JURISDICTION_FLAGS: Record<Jurisdiction, { emoji: string; label: string }>
   UK: { emoji: '🇬🇧', label: 'United Kingdom' },
   EU: { emoji: '🇪🇺', label: 'European Union' },
   IN: { emoji: '🇮🇳', label: 'India' },
+  CA: { emoji: '🇨🇦', label: 'Canada' },
+  SG: { emoji: '🇸🇬', label: 'Singapore' },
+  HK: { emoji: '🇭🇰', label: 'Hong Kong' },
 };
 
 interface Props {

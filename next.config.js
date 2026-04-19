@@ -1,4 +1,8 @@
 /** @type {import('next').NextConfig} */
+const { withSentryConfig } = process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN
+  ? require('@sentry/nextjs')
+  : { withSentryConfig: (cfg) => cfg };
+
 const securityHeaders = [
   { key: 'X-DNS-Prefetch-Control', value: 'on' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
@@ -17,6 +21,7 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '2mb',
     },
+    instrumentationHook: true,
   },
   async headers() {
     return [
@@ -28,4 +33,11 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withSentryConfig(nextConfig, {
+  silent: true,
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  widenClientFileUpload: true,
+  hideSourceMaps: true,
+  disableLogger: true,
+});

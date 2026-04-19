@@ -537,4 +537,270 @@ export const REPORT_CATALOG: Record<string, CatalogEntry> = {
       'Annual ICAAP submission by all commercial banks under Pillar 2 of the Basel framework.',
     frequency: 'annual',
   },
+
+  // ============================================================
+  // CANADA (OSFI)
+  // ============================================================
+  CA_CAR: {
+    id: 'CA_CAR',
+    jurisdiction: 'CA',
+    regulator: 'OSFI',
+    shortName: 'CAR Return',
+    fullName: 'Capital Adequacy Return',
+    description:
+      'Quarterly capital adequacy reporting for Canadian banks and bank holding companies under OSFI Capital Adequacy Requirements Guideline.',
+    frequency: 'quarterly',
+    referenceUrl: 'https://www.osfi-bsif.gc.ca/',
+  },
+  CA_LCR_NSFR: {
+    id: 'CA_LCR_NSFR',
+    jurisdiction: 'CA',
+    regulator: 'OSFI',
+    shortName: 'LCR / NSFR',
+    fullName: 'Liquidity Coverage Ratio / Net Stable Funding Ratio',
+    description:
+      'Monthly LCR and quarterly NSFR returns under OSFI Liquidity Adequacy Requirements.',
+    frequency: 'monthly',
+  },
+  CA_A2_A1: {
+    id: 'CA_A2_A1',
+    jurisdiction: 'CA',
+    regulator: 'OSFI',
+    shortName: 'A2 / A1 Returns',
+    fullName: 'Balance Sheet and Income Statement Returns',
+    description:
+      'Monthly balance sheet (A2) and income statement (A1) returns filed by federally regulated deposit-taking institutions.',
+    frequency: 'monthly',
+  },
+  CA_FINTRAC_LCTR: {
+    id: 'CA_FINTRAC_LCTR',
+    jurisdiction: 'CA',
+    regulator: 'FINTRAC',
+    shortName: 'LCTR / STR',
+    fullName: 'Large Cash + Suspicious Transaction Reports',
+    description:
+      'Mandatory reports to FINTRAC on large cash transactions (≥ CAD 10,000) and suspicious transactions under the PCMLTFA.',
+    frequency: 'event_driven',
+  },
+  CA_LRR: {
+    id: 'CA_LRR',
+    jurisdiction: 'CA',
+    regulator: 'OSFI',
+    shortName: 'LRR',
+    fullName: 'Leverage Requirements Return',
+    description:
+      'Quarterly leverage ratio return under the OSFI Leverage Requirements Guideline.',
+    frequency: 'quarterly',
+  },
+
+  // ============================================================
+  // SINGAPORE (MAS)
+  // ============================================================
+  SG_MAS_610: {
+    id: 'SG_MAS_610',
+    jurisdiction: 'SG',
+    regulator: 'MAS',
+    shortName: 'MAS 610',
+    fullName: 'Notice 610 Statistical Returns',
+    description:
+      'Monthly statistical returns on assets, liabilities, and income by MAS-licensed banks in Singapore.',
+    frequency: 'monthly',
+    referenceUrl: 'https://www.mas.gov.sg/',
+  },
+  SG_MAS_757: {
+    id: 'SG_MAS_757',
+    jurisdiction: 'SG',
+    regulator: 'MAS',
+    shortName: 'MAS 757',
+    fullName: 'Notice 757 Lending of Singapore Dollars to Non-Resident Financial Institutions',
+    description:
+      'Singapore-dollar lending restrictions and monthly reporting for MAS-licensed banks.',
+    frequency: 'monthly',
+  },
+  SG_MAS_637: {
+    id: 'SG_MAS_637',
+    jurisdiction: 'SG',
+    regulator: 'MAS',
+    shortName: 'MAS 637',
+    fullName: 'Notice 637 Risk-Based Capital Adequacy for Banks',
+    description:
+      'Quarterly capital adequacy reporting for MAS-licensed banks under the Basel framework adopted in Singapore.',
+    frequency: 'quarterly',
+  },
+  SG_MAS_LCR: {
+    id: 'SG_MAS_LCR',
+    jurisdiction: 'SG',
+    regulator: 'MAS',
+    shortName: 'MAS 649',
+    fullName: 'Notice 649 Minimum Liquid Assets and Liquidity Coverage Ratio',
+    description:
+      'Daily and monthly liquidity reporting for MAS-licensed banks.',
+    frequency: 'daily',
+  },
+  SG_STR: {
+    id: 'SG_STR',
+    jurisdiction: 'SG',
+    regulator: 'STRO (CAD)',
+    shortName: 'STR',
+    fullName: 'Suspicious Transaction Report',
+    description:
+      'Event-driven STR filing to the Suspicious Transaction Reporting Office under the CDSA.',
+    frequency: 'event_driven',
+  },
+
+  // ============================================================
+  // HONG KONG (HKMA)
+  // ============================================================
+  HK_MA_BS1: {
+    id: 'HK_MA_BS1',
+    jurisdiction: 'HK',
+    regulator: 'HKMA',
+    shortName: 'MA(BS)1',
+    fullName: 'Monthly Return of Assets and Liabilities',
+    description:
+      'Monthly balance sheet return filed by authorized institutions to the HKMA.',
+    frequency: 'monthly',
+    referenceUrl: 'https://www.hkma.gov.hk/',
+  },
+  HK_CAR: {
+    id: 'HK_CAR',
+    jurisdiction: 'HK',
+    regulator: 'HKMA',
+    shortName: 'Capital Adequacy Ratio',
+    fullName: 'Capital Adequacy Return',
+    description:
+      'Quarterly CAR return under the HK Banking (Capital) Rules (Basel III adoption in HK).',
+    frequency: 'quarterly',
+  },
+  HK_LMR: {
+    id: 'HK_LMR',
+    jurisdiction: 'HK',
+    regulator: 'HKMA',
+    shortName: 'LMR / LCR',
+    fullName: 'Liquidity Maintenance Ratio / Liquidity Coverage Ratio',
+    description:
+      'Monthly liquidity reporting (LMR for category-2 AIs, LCR for category-1 AIs) under the HK Banking (Liquidity) Rules.',
+    frequency: 'monthly',
+  },
+  HK_DISCLOSURE: {
+    id: 'HK_DISCLOSURE',
+    jurisdiction: 'HK',
+    regulator: 'HKMA',
+    shortName: 'Banking Disclosure',
+    fullName: 'Banking Disclosure Statement',
+    description:
+      'Semi-annual public disclosures under the HK Banking (Disclosure) Rules — Pillar 3 equivalent.',
+    frequency: 'semi_annual',
+  },
+  HK_JFIU: {
+    id: 'HK_JFIU',
+    jurisdiction: 'HK',
+    regulator: 'JFIU',
+    shortName: 'STR',
+    fullName: 'Suspicious Transaction Report to the Joint Financial Intelligence Unit',
+    description:
+      'Event-driven STR filing under the Organized and Serious Crimes Ordinance.',
+    frequency: 'event_driven',
+  },
+
+  // ============================================================
+  // INSURANCE — minimal viable coverage (NAIC + Solvency II + IRDAI)
+  // ============================================================
+  US_NAIC_ANNUAL: {
+    id: 'US_NAIC_ANNUAL',
+    jurisdiction: 'US',
+    regulator: 'NAIC / State DOI',
+    shortName: 'NAIC Annual Statement',
+    fullName: 'NAIC Annual Statement (Blue/Green/Yellow/Orange book)',
+    description:
+      'Annual statutory financial filing with the NAIC and state insurance regulators. Color-coded by line of business.',
+    frequency: 'annual',
+    referenceUrl: 'https://www.naic.org/',
+  },
+  US_NAIC_ORSA: {
+    id: 'US_NAIC_ORSA',
+    jurisdiction: 'US',
+    regulator: 'NAIC / State DOI',
+    shortName: 'ORSA',
+    fullName: 'Own Risk and Solvency Assessment Summary Report',
+    description:
+      'Annual ORSA summary for US insurers exceeding NAIC premium/volume thresholds.',
+    frequency: 'annual',
+  },
+  EU_SOLVENCY_II_QRT: {
+    id: 'EU_SOLVENCY_II_QRT',
+    jurisdiction: 'EU',
+    regulator: 'EIOPA / NCA',
+    shortName: 'Solvency II QRTs',
+    fullName: 'Solvency II Quantitative Reporting Templates (S.02-S.32)',
+    description:
+      'Quarterly and annual Solvency II QRTs submitted to the home National Competent Authority.',
+    frequency: 'quarterly',
+    referenceUrl: 'https://www.eiopa.europa.eu/',
+  },
+  EU_SOLVENCY_II_SFCR: {
+    id: 'EU_SOLVENCY_II_SFCR',
+    jurisdiction: 'EU',
+    regulator: 'EIOPA / NCA',
+    shortName: 'SFCR / RSR',
+    fullName: 'Solvency and Financial Condition Report & Regular Supervisory Report',
+    description:
+      'Annual public SFCR + confidential RSR under Solvency II Articles 51 and 35.',
+    frequency: 'annual',
+  },
+  IN_IRDAI_PUBLIC: {
+    id: 'IN_IRDAI_PUBLIC',
+    jurisdiction: 'IN',
+    regulator: 'IRDAI',
+    shortName: 'IRDAI Public Disclosures',
+    fullName: 'Public Disclosures by Insurers',
+    description:
+      'Quarterly and annual public disclosures mandated by IRDAI (Investment, Solvency, Claims Paid).',
+    frequency: 'quarterly',
+    referenceUrl: 'https://www.irdai.gov.in/',
+  },
+
+  // ============================================================
+  // CRYPTO / DIGITAL ASSETS — minimal viable coverage
+  // ============================================================
+  EU_MICA_PERIODIC: {
+    id: 'EU_MICA_PERIODIC',
+    jurisdiction: 'EU',
+    regulator: 'ESMA / EBA / NCA',
+    shortName: 'MiCA Periodic Report',
+    fullName: 'Markets in Crypto-Assets Regulation Periodic Reporting',
+    description:
+      'Ongoing reporting by authorised CASPs, ART/EMT issuers under the EU MiCA regulation.',
+    frequency: 'quarterly',
+  },
+  EU_MICA_ART_EMT: {
+    id: 'EU_MICA_ART_EMT',
+    jurisdiction: 'EU',
+    regulator: 'EBA',
+    shortName: 'ART/EMT Whitepaper',
+    fullName: 'Asset-Referenced / E-Money Token Whitepaper',
+    description:
+      'Mandatory whitepaper + ongoing reserve disclosures under MiCA Titles III/IV for stablecoin issuers.',
+    frequency: 'event_driven',
+  },
+  US_NYDFS_BITLICENSE: {
+    id: 'US_NYDFS_BITLICENSE',
+    jurisdiction: 'US',
+    regulator: 'NYDFS',
+    shortName: 'BitLicense Annual Report',
+    fullName: '23 NYCRR Part 200 Annual Financial Statement + Transaction Monitoring Report',
+    description:
+      'Annual financial statement + transaction-monitoring-program certification for NYDFS BitLicense holders.',
+    frequency: 'annual',
+  },
+  US_FINCEN_MSB: {
+    id: 'US_FINCEN_MSB',
+    jurisdiction: 'US',
+    regulator: 'FinCEN',
+    shortName: 'MSB SAR / 8300',
+    fullName: 'Money Services Business BSA Filings',
+    description:
+      'SAR, CTR, and Form 8300 filings for money-services businesses (including many crypto firms) under 31 CFR §1022.',
+    frequency: 'event_driven',
+  },
 };

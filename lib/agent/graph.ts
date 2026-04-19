@@ -25,7 +25,7 @@ import { z } from 'zod';
 import { bankProfileSchema, makeWebSearchTool } from './tools';
 import type { BankProfile, Jurisdiction, SearchStep } from '../types';
 
-const ALL_JURISDICTIONS: Jurisdiction[] = ['US', 'UK', 'EU', 'IN'];
+const ALL_JURISDICTIONS: Jurisdiction[] = ['US', 'UK', 'EU', 'IN', 'CA', 'SG', 'HK'];
 
 export interface DeepAgentOptions {
   apiKey?: string;
@@ -64,6 +64,10 @@ const AgentState = Annotation.Root({
     reducer: (_prev, next) => next ?? '',
     default: () => '',
   }),
+  entityType: Annotation<'bank' | 'insurer' | 'crypto_firm'>({
+    reducer: (_prev, next) => next ?? 'bank',
+    default: () => 'bank',
+  }),
   jurisdictionsToProbe: Annotation<Jurisdiction[]>({
     reducer: (_prev, next) => next ?? [],
     default: () => [],
@@ -97,18 +101,24 @@ type State = typeof AgentState.State;
 const plannerSchema = z.object({
   identityNotes: z
     .string()
-    .describe('3-5 sentences resolving the bank identity and flagging ambiguity.'),
-  jurisdictionsToProbe: z
-    .array(z.enum(['US', 'UK', 'EU', 'IN']))
+    .describe('3-5 sentences resolving the entity identity and flagging ambiguity.'),
+  entityType: z
+    .enum(['bank', 'insurer', 'crypto_firm'])
     .describe(
-      'Which jurisdictions to investigate. Default to all four unless the bank is clearly scoped to fewer (e.g. "State Bank of India" → ["IN", "US", "UK"] because SBI has foreign branches).',
+      'Forks the rules engine. "bank" for commercial / investment / holding-company banks (default). "insurer" for life / P&C / reinsurers. "crypto_firm" for exchanges / custodians / stablecoin issuers.',
+    ),
+  jurisdictionsToProbe: z
+    .array(z.enum(['US', 'UK', 'EU', 'IN', 'CA', 'SG', 'HK']))
+    .describe(
+      'Which jurisdictions to investigate. Default to [US, UK, EU, IN, CA, SG, HK] unless the entity is clearly scoped to fewer. Only exclude a jurisdiction when you are confident there is no regulated presence there.',
     ),
 });
 
-const PLANNER_PROMPT = `You are the planner of a deep regulatory-research agent. Given a bank name, do two things:
+const PLANNER_PROMPT = `You are the planner of a deep regulatory-research agent. Given an entity name, do three things:
 
-1. Resolve the identity. In 3-5 sentences, name the most likely legal entity, note any name-collision risk, and spell out the home country of the parent.
-2. Choose jurisdictions to probe. Return a subset of [US, UK, EU, IN]. Be generous — ALWAYS include at least the home jurisdiction + any jurisdictions commonly hosting foreign branches/subsidiaries for banks of this type. For large multinational banks default to all four. Only exclude a jurisdiction if you are confident the bank has no regulated presence there (e.g. a tiny US community bank → probably just US).
+1. Resolve the identity. In 3-5 sentences, name the most likely legal entity, note any name-collision risk, and spell out the home country.
+2. Determine the entity type: "bank" (commercial / investment / holding-company / foreign branch), "insurer" (life / P&C / reinsurer), or "crypto_firm" (crypto exchange / custodian / stablecoin issuer). If the name is ambiguous, prefer the larger / more prominent entity. Default to "bank" when uncertain.
+3. Choose jurisdictions to probe. Return a subset of [US, UK, EU, IN, CA, SG, HK]. Be generous — ALWAYS include the home jurisdiction + any jurisdictions commonly hosting foreign branches/subsidiaries for entities of this type. For large multinational firms default to all seven. Only exclude a jurisdiction if you are confident there is no regulated presence there.
 
 Do not invoke any tools. Output only the structured plan.`;
 
@@ -120,6 +130,7 @@ async function plannerNode(state: State, llm: AzureChatOpenAI): Promise<Partial<
   ]);
   return {
     identityNotes: result.identityNotes,
+    entityType: result.entityType,
     jurisdictionsToProbe: result.jurisdictionsToProbe,
   };
 }
@@ -268,6 +279,9 @@ export function buildDeepAgent(opts: DeepAgentOptions) {
     .addNode('researchUK', makeResearcherNode('UK', opts.trace, llm))
     .addNode('researchEU', makeResearcherNode('EU', opts.trace, llm))
     .addNode('researchIN', makeResearcherNode('IN', opts.trace, llm))
+    .addNode('researchCA', makeResearcherNode('CA', opts.trace, llm))
+    .addNode('researchSG', makeResearcherNode('SG', opts.trace, llm))
+    .addNode('researchHK', makeResearcherNode('HK', opts.trace, llm))
     .addNode('verifier', (s) => verifierNode(s, llm))
     .addNode('synthesizer', (s) => synthesizerNode(s, llm))
     // Planner fans out to every researcher in parallel. Researchers for
@@ -278,21 +292,46 @@ export function buildDeepAgent(opts: DeepAgentOptions) {
     .addEdge('planner', 'researchUK')
     .addEdge('planner', 'researchEU')
     .addEdge('planner', 'researchIN')
-    // All four researchers must complete before the verifier runs
+    .addEdge('planner', 'researchCA')
+    .addEdge('planner', 'researchSG')
+    .addEdge('planner', 'researchHK')
+    // All seven researchers must complete before the verifier runs
     // (LangGraph auto-barrier on multiple incoming edges).
     .addEdge('researchUS', 'verifier')
     .addEdge('researchUK', 'verifier')
     .addEdge('researchEU', 'verifier')
     .addEdge('researchIN', 'verifier')
+    .addEdge('researchCA', 'verifier')
+    .addEdge('researchSG', 'verifier')
+    .addEdge('researchHK', 'verifier')
     // Verifier either routes back to a single researcher for one retry, or
     // forward to the synthesizer.
     .addConditionalEdges(
       'verifier',
-      (s): 'researchUS' | 'researchUK' | 'researchEU' | 'researchIN' | 'synthesizer' => {
+      (
+        s,
+      ):
+        | 'researchUS'
+        | 'researchUK'
+        | 'researchEU'
+        | 'researchIN'
+        | 'researchCA'
+        | 'researchSG'
+        | 'researchHK'
+        | 'synthesizer' => {
         if (s.retryJurisdiction) return `research${s.retryJurisdiction}` as const;
         return 'synthesizer';
       },
-      ['researchUS', 'researchUK', 'researchEU', 'researchIN', 'synthesizer'],
+      [
+        'researchUS',
+        'researchUK',
+        'researchEU',
+        'researchIN',
+        'researchCA',
+        'researchSG',
+        'researchHK',
+        'synthesizer',
+      ],
     )
     .addEdge('synthesizer', END)
     .compile();

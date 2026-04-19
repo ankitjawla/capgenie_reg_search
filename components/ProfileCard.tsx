@@ -18,6 +18,9 @@ const JURISDICTION_LABEL: Record<Jurisdiction, string> = {
   UK: 'United Kingdom',
   EU: 'European Union',
   IN: 'India',
+  CA: 'Canada',
+  SG: 'Singapore',
+  HK: 'Hong Kong',
 };
 
 function humanize(s: string): string {

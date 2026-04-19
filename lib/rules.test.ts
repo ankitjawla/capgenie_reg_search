@@ -143,6 +143,101 @@ describe('applyRules', () => {
     expect(result).not.toContain('US_FFIEC_051');
   });
 
+  it('Canadian bank gets OSFI Capital Adequacy + FINTRAC returns', () => {
+    const result = ids(
+      buildProfile({
+        legalName: 'Royal Bank of Canada',
+        hqCountry: 'CA',
+        category: 'commercial_bank',
+        assetSizeTier: 'gt_700B',
+        globalAssetsUsdB: 1400,
+        presence: [{ jurisdiction: 'CA', entityType: 'commercial_bank', jurisdictionAssetsUsdB: 1400 }],
+        activities: ['retail_deposits', 'commercial_lending', 'mortgage_lending'],
+      }),
+    );
+    expect(result).toContain('CA_CAR');
+    expect(result).toContain('CA_A2_A1');
+    expect(result).toContain('CA_FINTRAC_LCTR');
+    expect(result).toContain('CA_LCR_NSFR');
+  });
+
+  it('Singapore MAS-licensed bank gets core MAS notices', () => {
+    const result = ids(
+      buildProfile({
+        legalName: 'DBS Bank',
+        hqCountry: 'SG',
+        category: 'commercial_bank',
+        assetSizeTier: '250B_to_700B',
+        globalAssetsUsdB: 620,
+        presence: [{ jurisdiction: 'SG', entityType: 'commercial_bank', jurisdictionAssetsUsdB: 500 }],
+        activities: ['retail_deposits', 'commercial_lending', 'foreign_exchange'],
+      }),
+    );
+    expect(result).toContain('SG_MAS_610');
+    expect(result).toContain('SG_MAS_637');
+    expect(result).toContain('SG_MAS_LCR');
+    expect(result).toContain('SG_STR');
+  });
+
+  it('Hong Kong authorized institution gets HKMA returns', () => {
+    const result = ids(
+      buildProfile({
+        legalName: 'HSBC Hong Kong',
+        hqCountry: 'HK',
+        category: 'commercial_bank',
+        assetSizeTier: 'gt_700B',
+        globalAssetsUsdB: 900,
+        presence: [{ jurisdiction: 'HK', entityType: 'commercial_bank', jurisdictionAssetsUsdB: 900 }],
+        activities: ['retail_deposits', 'commercial_lending'],
+      }),
+    );
+    expect(result).toContain('HK_MA_BS1');
+    expect(result).toContain('HK_CAR');
+    expect(result).toContain('HK_LMR');
+    expect(result).toContain('HK_DISCLOSURE');
+    expect(result).toContain('HK_JFIU');
+  });
+
+  it('EU insurer gets Solvency II QRTs + SFCR, not banking reports', () => {
+    const result = ids(
+      buildProfile({
+        legalName: 'Allianz SE',
+        entityType: 'insurer',
+        hqCountry: 'DE',
+        category: 'property_casualty_insurer',
+        assetSizeTier: 'gt_700B',
+        globalAssetsUsdB: 1200,
+        presence: [{ jurisdiction: 'EU', entityType: 'property_casualty_insurer' }],
+        activities: [],
+      }),
+    );
+    expect(result).toContain('EU_SOLVENCY_II_QRT');
+    expect(result).toContain('EU_SOLVENCY_II_SFCR');
+    // Banking rules should NOT fire for insurers:
+    expect(result).not.toContain('EU_COREP');
+    expect(result).not.toContain('US_FFIEC_031');
+  });
+
+  it('US crypto firm gets NYDFS BitLicense + FinCEN MSB, not banking reports', () => {
+    const result = ids(
+      buildProfile({
+        legalName: 'Coinbase Inc.',
+        entityType: 'crypto_firm',
+        hqCountry: 'US',
+        category: 'crypto_exchange',
+        assetSizeTier: '10B_to_50B',
+        globalAssetsUsdB: 20,
+        isPubliclyListed: true,
+        presence: [{ jurisdiction: 'US', entityType: 'crypto_exchange' }],
+        activities: ['crypto_assets'],
+      }),
+    );
+    expect(result).toContain('US_NYDFS_BITLICENSE');
+    expect(result).toContain('US_FINCEN_MSB');
+    expect(result).not.toContain('US_FFIEC_031');
+    expect(result).not.toContain('US_FR_Y_9C');
+  });
+
   it('bank with no US/UK/EU/IN presence returns an empty list', () => {
     const result = ids(
       buildProfile({

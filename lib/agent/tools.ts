@@ -43,7 +43,9 @@ export function makeWebSearchTool(trace: SearchStep[], agentLabel = 'researcher'
 
 // ---- BankProfile structured output schema --------------------------------
 
-const jurisdictionEnum = z.enum(['US', 'UK', 'EU', 'IN']);
+const jurisdictionEnum = z.enum(['US', 'UK', 'EU', 'IN', 'CA', 'SG', 'HK']);
+
+const entityTypeEnum = z.enum(['bank', 'insurer', 'crypto_firm']);
 
 const bankCategoryEnum = z.enum([
   'commercial_bank',
@@ -57,6 +59,12 @@ const bankCategoryEnum = z.enum([
   'payments_bank',
   'nbfc',
   'building_society',
+  'life_insurer',
+  'property_casualty_insurer',
+  'reinsurer',
+  'crypto_exchange',
+  'crypto_custodian',
+  'stablecoin_issuer',
   'other',
 ]);
 
@@ -96,9 +104,12 @@ const activityEnum = z.enum([
 export const bankProfileSchema = z.object({
   legalName: z.string(),
   commonName: z.string().nullable(),
+  entityType: entityTypeEnum
+    .describe('bank | insurer | crypto_firm — forks which rules engine runs.')
+    .nullable(),
   hqCountry: z
     .string()
-    .describe("ISO 3166-1 alpha-2 country code of the bank's headquarters.")
+    .describe("ISO 3166-1 alpha-2 country code of the headquarters.")
     .nullable(),
   globalAssetsUsdB: z
     .number()
