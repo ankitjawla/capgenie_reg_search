@@ -6,6 +6,7 @@ import StatusChip from './StatusChip';
 
 const NAV = [
   { href: '/', label: 'Home' },
+  { href: '/analyze', label: 'Analyze' },
   { href: '/regulators', label: 'Regulators' },
   { href: '/compare', label: 'Compare' },
 ];
@@ -41,9 +42,6 @@ export default function SiteHeader() {
               </Link>
             );
           })}
-          <span className="ml-2 hidden text-xs text-slate-400 sm:inline">
-            <kbd className="rounded border border-slate-300 px-1 dark:border-slate-600">⌘K</kbd>
-          </span>
           <span className="ml-2">
             <StatusChip />
           </span>

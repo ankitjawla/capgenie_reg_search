@@ -53,24 +53,21 @@ async function runAxe(page: Page): Promise<UIIssue[]> {
 }
 
 test.describe('CapGenie UI health check', () => {
-  test('home loads with no console errors and passes axe', async ({ page }, info) => {
+  test('landing page loads with no console errors and passes axe', async ({ page }, info) => {
     const tracker = trackIssues(page);
 
     await page.goto('/');
     await expect(page).toHaveTitle(/CapGenie/);
+    // Hero headline on the marketing landing.
     await expect(
-      page.getByRole('heading', { name: /Which reports does your bank need to file/ }),
+      page.getByRole('heading', { name: /Map any bank to every report/ }),
     ).toBeVisible();
 
-    // BankForm visible inside Hero
-    await expect(page.getByLabel('Bank name')).toBeVisible();
+    // Primary CTA visible.
+    await expect(page.getByRole('link', { name: /Start an analysis/ }).first()).toBeVisible();
 
-    // Hero "How it works" steps render
-    await expect(page.getByText(/Step 1/i)).toBeVisible();
-    await expect(page.getByText(/Verify/i).first()).toBeVisible();
-
-    // Footer present
-    await expect(page.getByText(/Advisory only/)).toBeVisible();
+    // Footer disclaimer visible.
+    await expect(page.getByText(/Advisory only/).first()).toBeVisible();
 
     // axe pass
     const axeIssues = await runAxe(page);
@@ -96,10 +93,25 @@ test.describe('CapGenie UI health check', () => {
     expect(blocking, 'Found blocking console/page errors').toEqual([]);
   });
 
+  test('analyze page loads with no console errors and has BankForm', async ({ page }, info) => {
+    const tracker = trackIssues(page);
+    await page.goto('/analyze');
+    await expect(
+      page.getByRole('heading', { name: /Which reports does your bank need to file/ }),
+    ).toBeVisible();
+    await expect(page.getByLabel('Bank name')).toBeVisible();
+    await page.screenshot({ path: `${info.outputDir}/analyze.png`, fullPage: true });
+
+    expect(
+      tracker.issues.filter((i) => i.level === 'error'),
+      'No errors loading /analyze',
+    ).toEqual([]);
+  });
+
   test('dark mode toggle works without errors', async ({ page }, info) => {
     const tracker = trackIssues(page);
-    await page.goto('/');
-    // Theme select in the header
+    await page.goto('/analyze');
+    // Theme select in the analyze header
     const themeSelect = page.getByLabel('Theme');
     await themeSelect.selectOption('dark');
     await expect(page.locator('html.dark')).toHaveCount(1);
@@ -114,7 +126,7 @@ test.describe('CapGenie UI health check', () => {
 
   test('command palette opens on Cmd+K', async ({ page }, info) => {
     const tracker = trackIssues(page);
-    await page.goto('/');
+    await page.goto('/analyze');
     await page.keyboard.press('Meta+K');
     // Modal input appears
     await expect(page.getByPlaceholder(/Type a bank name or a command/)).toBeVisible({

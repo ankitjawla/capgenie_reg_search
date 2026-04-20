@@ -1,574 +1,351 @@
-'use client';
-
-import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
-import { toast } from 'sonner';
-import BankForm from '@/components/BankForm';
-import Hero from '@/components/Hero';
-import Footer from '@/components/Footer';
-import { SkeletonProfile, SkeletonReports } from '@/components/Skeletons';
-import ProfileCard from '@/components/ProfileCard';
-import EditableProfileForm from '@/components/EditableProfileForm';
-import ReportsList from '@/components/ReportsList';
-import FilingCalendar from '@/components/FilingCalendar';
-import ResearchTranscript from '@/components/ResearchTranscript';
-import FollowupChat from '@/components/FollowupChat';
-import ProgressGraph from '@/components/ProgressGraph';
-import CommandPalette from '@/components/CommandPalette';
-import {
-  ReportsByJurisdictionChart,
-  ReportsByFrequencyChart,
-  AssetsByJurisdictionChart,
-} from '@/components/charts';
-import { applyRules } from '@/lib/rules';
-import type { AnalysisResult, BankProfile } from '@/lib/types';
-import {
-  clearPersistedAnalysis,
-  loadPersistedAnalysis,
-  savePersistedAnalysis,
-} from '@/lib/persistence';
-import { buildShareUrl, readShareFromLocation } from '@/lib/share';
+import type { Metadata } from 'next';
+import { REGULATORS } from '@/lib/regulators';
+import { REPORT_CATALOG } from '@/lib/reports-catalog';
 
-interface ProgressEvent {
-  kind: 'search' | 'text' | 'info';
-  text: string;
-}
+export const metadata: Metadata = {
+  title: 'CapGenie — Bank Regulatory Report Advisor',
+  description:
+    'A LangGraph deep agent on Azure OpenAI that researches a bank across seven jurisdictions, cross-verifies the key facts against primary sources, and maps the profile to applicable regulatory reports.',
+};
 
-type Tab = 'reports' | 'calendar';
-type Theme = 'light' | 'dark' | 'system';
-
-const THEME_KEY = 'capgenie:theme';
-
-function applyTheme(theme: Theme) {
-  if (typeof window === 'undefined') return;
-  const effective =
-    theme === 'system'
-      ? window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'dark'
-        : 'light'
-      : theme;
-  document.documentElement.classList.toggle('dark', effective === 'dark');
-}
-
-export default function Home() {
-  const [loading, setLoading] = useState(false);
-  const [bankName, setBankName] = useState<string>('');
-  const [apiResult, setApiResult] = useState<AnalysisResult | null>(null);
-  const [editedProfile, setEditedProfile] = useState<BankProfile | null>(null);
-  const [editMode, setEditMode] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [progress, setProgress] = useState<ProgressEvent[]>([]);
-  const [tab, setTab] = useState<Tab>('reports');
-  const [transcriptOpen, setTranscriptOpen] = useState(false);
-  const [theme, setTheme] = useState<Theme>('system');
-  const [shareCopied, setShareCopied] = useState(false);
-  const hydratedRef = useRef(false);
-
-  const profile = editedProfile ?? apiResult?.profile ?? null;
-  const reports = useMemo(() => (profile ? applyRules(profile) : []), [profile]);
-  const warnings = useMemo(() => {
-    if (!profile) return undefined;
-    const w: string[] = [];
-    if (profile.assetSizeTier === 'unknown') {
-      w.push('Asset size is unknown; report thresholds may be approximate.');
-    }
-    if (profile.presence.length === 0) {
-      w.push('No regulated presence in US, UK, EU, or India — the rules engine will return nothing.');
-    }
-    return w.length ? w : undefined;
-  }, [profile]);
-
-  // --- theme hydration + persistence ---
-  useEffect(() => {
-    const stored = (typeof window !== 'undefined' && window.localStorage.getItem(THEME_KEY)) as Theme | null;
-    const initial = stored ?? 'system';
-    setTheme(initial);
-    applyTheme(initial);
-    const mql = window.matchMedia('(prefers-color-scheme: dark)');
-    const onChange = () => {
-      if ((window.localStorage.getItem(THEME_KEY) ?? 'system') === 'system') applyTheme('system');
-    };
-    mql.addEventListener('change', onChange);
-    return () => mql.removeEventListener('change', onChange);
-  }, []);
-
-  function setThemeAndPersist(next: Theme) {
-    setTheme(next);
-    try {
-      window.localStorage.setItem(THEME_KEY, next);
-    } catch {
-      /* ignore */
-    }
-    applyTheme(next);
-  }
-
-  // --- share-link hydration (on first mount only) ---
-  useEffect(() => {
-    if (hydratedRef.current) return;
-    hydratedRef.current = true;
-    const share = readShareFromLocation();
-    if (share) {
-      setBankName(share.bankName);
-      if (share.editedProfile) {
-        setEditedProfile(share.editedProfile);
-      }
-      void runAnalysis(share.bankName);
-      return;
-    }
-    const persisted = loadPersistedAnalysis();
-    if (persisted) {
-      setBankName(persisted.bankName);
-      if (persisted.apiResult) setApiResult(persisted.apiResult);
-      if (persisted.editedProfile) setEditedProfile(persisted.editedProfile);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // --- persist on change ---
-  useEffect(() => {
-    if (!bankName) return;
-    savePersistedAnalysis({
-      bankName,
-      apiResult: apiResult ?? undefined,
-      editedProfile: editedProfile ?? undefined,
-      savedAtIso: new Date().toISOString(),
-    });
-  }, [bankName, apiResult, editedProfile]);
-
-  async function runAnalysis(name: string) {
-    setLoading(true);
-    setError(null);
-    setApiResult(null);
-    setEditedProfile(null);
-    setEditMode(false);
-    setProgress([]);
-    setBankName(name);
-
-    try {
-      const res = await fetch('/api/analyze/stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bankName: name }),
-      });
-      if (!res.ok || !res.body) {
-        const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-        setError(data?.error ?? `Request failed with status ${res.status}`);
-        return;
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split('\n\n');
-        buffer = parts.pop() ?? '';
-        for (const part of parts) {
-          const line = part.trim();
-          if (!line.startsWith('data:')) continue;
-          try {
-            const evt = JSON.parse(line.slice(5).trim()) as
-              | { type: 'search'; query: string }
-              | { type: 'text'; delta: string }
-              | { type: 'info'; message: string }
-              | { type: 'result'; result: AnalysisResult }
-              | { type: 'error'; error: string };
-            if (evt.type === 'search') {
-              setProgress((p) => [...p, { kind: 'search', text: `Searching: ${evt.query}` }]);
-            } else if (evt.type === 'text') {
-              setProgress((p) => {
-                const last = p[p.length - 1];
-                if (last && last.kind === 'text') {
-                  return [...p.slice(0, -1), { kind: 'text', text: last.text + evt.delta }];
-                }
-                return [...p, { kind: 'text', text: evt.delta }];
-              });
-            } else if (evt.type === 'info') {
-              setProgress((p) => [...p, { kind: 'info', text: evt.message }]);
-            } else if (evt.type === 'result') {
-              setApiResult(evt.result);
-              if (evt.result.fromCache) {
-                toast.info('Loaded from cache', {
-                  description: 'Saved an Azure + Tavily round-trip.',
-                });
-              } else {
-                toast.success('Analysis complete', {
-                  description: `${evt.result.reports.length} report${
-                    evt.result.reports.length === 1 ? '' : 's'
-                  } across ${
-                    new Set(evt.result.reports.map((r) => r.jurisdiction)).size
-                  } jurisdiction${
-                    new Set(evt.result.reports.map((r) => r.jurisdiction)).size === 1 ? '' : 's'
-                  }.`,
-                });
-              }
-            } else if (evt.type === 'error') {
-              setError(evt.error);
-              toast.error('Analysis failed', { description: evt.error });
-            }
-          } catch {
-            // ignore malformed SSE chunk
-          }
-        }
-      }
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function handleSaveEdits(next: BankProfile) {
-    setEditedProfile(next);
-    setEditMode(false);
-    toast.success('Profile updated', {
-      description: 'Reports recomputed locally — no extra API call.',
-    });
-  }
-  function handleResetEdits() {
-    setEditedProfile(null);
-    setEditMode(false);
-    toast.info('Reverted to research', {
-      description: 'Showing the deep agent\u2019s original profile.',
-    });
-  }
-  function handleClearPersisted() {
-    clearPersistedAnalysis();
-    setApiResult(null);
-    setEditedProfile(null);
-    setEditMode(false);
-    setBankName('');
-    setError(null);
-    setProgress([]);
-    toast('Saved analysis cleared');
-  }
-  async function handleCopyShareLink() {
-    if (!bankName) return;
-    const url = buildShareUrl({
-      bankName,
-      editedProfile: editedProfile ?? undefined,
-    });
-    try {
-      await navigator.clipboard.writeText(url);
-      setShareCopied(true);
-      setTimeout(() => setShareCopied(false), 1500);
-      toast.success('Share link copied', {
-        description: 'Open it in another tab to load the same view.',
-      });
-    } catch {
-      window.prompt('Copy this share link:', url);
-    }
-  }
-
-  const isEdited = editedProfile !== null;
-  const trace = apiResult?.trace;
+export default function LandingPage() {
+  const regulatorCount = REGULATORS.length;
+  const reportCount = Object.keys(REPORT_CATALOG).length;
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-10 sm:py-14">
-      <header className="mb-8 flex items-start justify-between gap-4 no-print">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-brand-600" aria-hidden />
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">CapGenie</h1>
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-              Regulatory Report Advisor
+    <>
+      {/* HERO ======================================================== */}
+      <section className="relative overflow-hidden bg-ink-900 text-white">
+        <div className="absolute inset-0 bg-hero-radial" aria-hidden />
+        <div className="relative mx-auto flex max-w-6xl flex-col items-start px-4 py-20 sm:py-28">
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium uppercase tracking-wider backdrop-blur">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-500" />
+            Regulatory Report Advisor · live
+          </span>
+
+          <h1 className="mt-6 max-w-4xl font-display text-5xl font-extrabold tracking-tight sm:text-7xl">
+            Map any bank to every report it has to file.
+          </h1>
+          <p className="mt-5 max-w-2xl text-lg text-slate-300 sm:text-xl">
+            CapGenie researches a bank across US · UK · EU · India · Canada · Singapore · Hong Kong,
+            cross-verifies the key facts with primary sources, and tells you exactly which regulatory
+            reports apply — with citations.
+          </p>
+
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            <Link
+              href="/analyze"
+              className="inline-flex items-center gap-2 rounded-lg bg-accent-500 px-6 py-3 text-base font-bold text-white shadow-lg shadow-accent-500/30 transition hover:-translate-y-0.5 hover:bg-accent-600"
+            >
+              Start an analysis →
+            </Link>
+            <Link
+              href="/regulators"
+              className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/5 px-6 py-3 text-base font-semibold text-white backdrop-blur hover:border-brand-400 hover:bg-white/10"
+            >
+              Browse {regulatorCount} regulators
+            </Link>
+            <span className="ml-2 text-xs text-slate-400">
+              No login required · public demo
             </span>
           </div>
-          <p className="mt-2 max-w-2xl text-slate-600 dark:text-slate-300">
-            Enter a bank name. A LangGraph deep agent (Azure OpenAI + Bing) researches the bank, cross-verifies the key
-            facts, and lists the regulatory reports it most likely needs to file across US, UK, EU, and India.
+
+          {/* Stats strip */}
+          <div className="mt-14 grid w-full max-w-3xl grid-cols-2 gap-4 sm:grid-cols-4">
+            <Stat value={String(regulatorCount)} label="Regulators" />
+            <Stat value={String(reportCount)} label="Reports catalogued" />
+            <Stat value="7" label="Jurisdictions" />
+            <Stat value="28" label="Unit tests" />
+          </div>
+        </div>
+      </section>
+
+      {/* WHAT IT DOES ================================================ */}
+      <section className="bg-white py-20 dark:bg-slate-950">
+        <div className="mx-auto max-w-6xl px-4">
+          <SectionEyebrow>What it does</SectionEyebrow>
+          <h2 className="mt-3 max-w-3xl text-4xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
+            Four things, end-to-end.
+          </h2>
+
+          <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <FeatureCard
+              icon="🔎"
+              title="Researches"
+              body="A LangGraph deep agent fans out to seven parallel sub-agents — one per jurisdiction — each expert on that region's regulators. Calls Tavily / Bing for primary sources."
+            />
+            <FeatureCard
+              icon="✅"
+              title="Verifies"
+              body="A verifier node cross-checks the researchers' findings against each other and against fresh searches before anything reaches the final profile."
+            />
+            <FeatureCard
+              icon="📋"
+              title="Maps to reports"
+              body="A deterministic rules engine (28 unit tests + golden fixtures) converts the verified profile into the exact list of reports the bank must file."
+            />
+            <FeatureCard
+              icon="📎"
+              title="Cites evidence"
+              body="An evidence-citer pass links each recommendation back to a source URL and a specific regulation section — no unverified claims."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* HOW IT WORKS ================================================ */}
+      <section className="relative overflow-hidden bg-slate-50 py-20 dark:bg-slate-900">
+        <div className="mx-auto max-w-6xl px-4">
+          <SectionEyebrow>Under the hood</SectionEyebrow>
+          <h2 className="mt-3 max-w-3xl text-4xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
+            A multi-node deep agent. Not a prompt.
+          </h2>
+          <p className="mt-3 max-w-3xl text-slate-600 dark:text-slate-300">
+            Every analysis runs through a LangGraph state machine with specialized nodes — so verification is a graph-level gate, not a prompt-level hope.
           </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <select
-            value={theme}
-            onChange={(e) => setThemeAndPersist(e.target.value as Theme)}
-            aria-label="Theme"
-            className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-          >
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-            <option value="system">System</option>
-          </select>
-          <Link
-            href="/compare"
-            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
-          >
-            Compare
-          </Link>
-        </div>
-      </header>
 
-      {!profile && !loading && progress.length === 0 && (
-        <div className="no-print">
-          <Hero onSubmit={runAnalysis} loading={loading} />
+          <ol className="mt-12 space-y-4">
+            <StepCard
+              step="01"
+              title="Planner"
+              body="Reads the bank name, resolves identity (flagging name-collision risk), and decides which of the seven jurisdictions to probe and what entity type to assume (bank / insurer / crypto firm)."
+            />
+            <StepCard
+              step="02"
+              title="Researchers × 7 (parallel)"
+              body="One per jurisdiction — US, UK, EU, IN, CA, SG, HK — each seeded with the regulators operating there (names, websites, bios) so it scopes queries via site: filters against primary sources."
+            />
+            <StepCard
+              step="03"
+              title="Verifier"
+              body="Cross-checks the seven reports. If a jurisdiction's findings are uncited or contradictory, routes back for one retry before proceeding."
+            />
+            <StepCard
+              step="04"
+              title="Synthesizer"
+              body="Produces a structured BankProfile via Zod schema. Strict-mode checks every required field is filled or explicitly null."
+            />
+            <StepCard
+              step="05"
+              title="Rules engine + evidence-citer"
+              body="Pure TypeScript rules map the profile to reports. A final Azure call links each report to a citation from the researcher-cited sources."
+            />
+          </ol>
         </div>
-      )}
+      </section>
 
-      {(profile || loading || progress.length > 0) && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm no-print dark:border-slate-700 dark:bg-slate-900">
-          <BankForm onSubmit={runAnalysis} loading={loading} />
-        </div>
-      )}
+      {/* COVERAGE ==================================================== */}
+      <section className="bg-white py-20 dark:bg-slate-950">
+        <div className="mx-auto max-w-6xl px-4">
+          <SectionEyebrow>Coverage</SectionEyebrow>
+          <h2 className="mt-3 max-w-3xl text-4xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
+            Seven jurisdictions · {regulatorCount} regulators · {reportCount} reports.
+          </h2>
+          <p className="mt-3 max-w-3xl text-slate-600 dark:text-slate-300">
+            Plus three entity types — banks, insurers, crypto firms — each forking to its own rules engine.
+          </p>
 
-      {(loading || progress.length > 0) && (
-        <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_360px]">
-          <div
-            className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm no-print dark:border-slate-700 dark:bg-slate-900"
-            aria-live="polite"
-          >
-            {loading && (
-              <div className="flex items-center gap-3 text-slate-700 dark:text-slate-200">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
-                <span className="text-sm">Researching {bankName || 'the bank'}…</span>
+          <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+            {[
+              { flag: '🇺🇸', name: 'United States' },
+              { flag: '🇬🇧', name: 'United Kingdom' },
+              { flag: '🇪🇺', name: 'European Union' },
+              { flag: '🇮🇳', name: 'India' },
+              { flag: '🇨🇦', name: 'Canada' },
+              { flag: '🇸🇬', name: 'Singapore' },
+              { flag: '🇭🇰', name: 'Hong Kong' },
+            ].map((j) => (
+              <div
+                key={j.name}
+                className="flex flex-col items-center rounded-xl border border-slate-200 bg-slate-50 p-4 text-center dark:border-slate-700 dark:bg-slate-900"
+              >
+                <div className="text-3xl" aria-hidden>
+                  {j.flag}
+                </div>
+                <div className="mt-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  {j.name}
+                </div>
               </div>
-            )}
-            {progress.length > 0 && (
-              <ul className="mt-3 max-h-72 space-y-1 overflow-y-auto text-sm">
-                {progress.slice(-30).map((p, i) => (
-                  <li key={i} className="flex gap-2">
-                    <span
-                      className={`mt-0.5 inline-block h-2 w-2 flex-none rounded-full ${
-                        p.kind === 'search'
-                          ? 'bg-blue-500'
-                          : p.kind === 'info'
-                          ? 'bg-slate-400'
-                          : 'bg-emerald-500'
-                      }`}
-                    />
-                    <span className={p.kind === 'text' ? 'text-slate-600 dark:text-slate-400' : 'text-slate-700 dark:text-slate-200'}>
-                      {p.text}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            ))}
           </div>
-          <div className="no-print">
-            <ProgressGraph
-              infoLog={progress.filter((p) => p.kind === 'info').map((p) => p.text)}
-              done={!loading}
-            />
+
+          <div className="mt-10 rounded-2xl border border-brand-200 bg-brand-50 p-6 dark:border-brand-800/60 dark:bg-brand-900/30">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-brand-900 dark:text-brand-100">
+                  Browse every regulator directly
+                </h3>
+                <p className="mt-1 text-sm text-brand-800/80 dark:text-brand-100/80">
+                  FFIEC, SEC, Federal Reserve, FDIC, PRA, FCA, EBA, ECB, CBI, ACPR, AMF, RBI, MAS, HKMA, OSFI, and more — every report each one issues, with plain-English descriptions.
+                </p>
+              </div>
+              <Link
+                href="/regulators"
+                className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+              >
+                Open the regulator library →
+              </Link>
+            </div>
           </div>
         </div>
-      )}
+      </section>
 
-      {error && (
-        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 no-print dark:border-red-800/60 dark:bg-red-900/30 dark:text-red-200">
-          <div className="font-semibold">Something went wrong</div>
-          <div className="mt-1 whitespace-pre-wrap">{error}</div>
+      {/* FEATURES GRID =============================================== */}
+      <section className="bg-slate-50 py-20 dark:bg-slate-900">
+        <div className="mx-auto max-w-6xl px-4">
+          <SectionEyebrow>The full feature set</SectionEyebrow>
+          <h2 className="mt-3 max-w-3xl text-4xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
+            Everything you get out of the box.
+          </h2>
+
+          <div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <MiniFeature title="Live streaming SSE" body="Watch the planner → researchers → verifier → synthesizer light up in real time as the deep agent works." />
+            <MiniFeature title="Editable profile" body="Edit any field the agent got wrong. The rules engine re-runs client-side — no extra LLM calls, instant reports." />
+            <MiniFeature title="Filing calendar" body="Group recommended reports by cadence with a 12-month heat-map. Click a month to see what lands." />
+            <MiniFeature title="Follow-up chat" body="Ask why a report isn't in the list. The client-side rules engine answers instantly; otherwise Azure handles it." />
+            <MiniFeature title="Side-by-side compare" body="Run two banks in parallel, diff their reports: shared vs A-only vs B-only." />
+            <MiniFeature title="Research transcript" body="Every web search the agent ran, with the snippets + URLs it read. Audit trail for every analysis." />
+            <MiniFeature title="CSV export" body="One-click download of the filtered report list — RFC-4180 compliant, escaped for commas/quotes/newlines." />
+            <MiniFeature title="Share link + persistence" body="Base64-encoded URL fragment shares the exact state; localStorage restores it on refresh." />
+            <MiniFeature title="Command palette" body="⌘K opens a fuzzy-search palette: jump to any regulator, run an analysis, switch tab, toggle theme." />
+            <MiniFeature title="Dark mode" body="Full light/dark/system theming with Tailwind class-based darkening on every component." />
+            <MiniFeature title="Print-ready" body="Ctrl+P produces a clean compliance-memo layout — form and chat hidden, reports paginated." />
+            <MiniFeature title="Golden-fixture tests" body="Six real banks (JPM, HDFC, Barclays, DBS, RBC, HSBC) snapshot-locked; rule regressions caught in CI." />
+          </div>
         </div>
-      )}
+      </section>
 
-      {/* Skeleton placeholders while the agent is still working and we have
-          no profile yet. Skeleton goes away as soon as `profile` shows up. */}
-      {loading && !profile && (
-        <div className="mt-8 space-y-6">
-          <SkeletonProfile />
-          <SkeletonReports />
+      {/* TECH STACK ================================================== */}
+      <section className="bg-white py-20 dark:bg-slate-950">
+        <div className="mx-auto max-w-6xl px-4">
+          <SectionEyebrow>Built on</SectionEyebrow>
+          <h2 className="mt-3 max-w-3xl text-4xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
+            Production-grade infrastructure.
+          </h2>
+
+          <div className="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <StackCard title="Azure OpenAI" subtitle="gpt-5.4 deployment" />
+            <StackCard title="LangGraph" subtitle="multi-node deep agent" />
+            <StackCard title="Tavily" subtitle="primary web search · Bing fallback" />
+            <StackCard title="Next.js 14" subtitle="App Router · RSC · SSE streaming" />
+            <StackCard title="Neon Postgres" subtitle="24h analysis cache + history" />
+            <StackCard title="Drizzle ORM" subtitle="typed schema + migrations" />
+            <StackCard title="Sentry" subtitle="error monitoring · perf tracing" />
+            <StackCard title="Vercel" subtitle="edge deploy · auto-scale" />
+          </div>
+
+          <div className="mt-10 flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <Badge>Zod validation</Badge>
+            <Badge>Rate limiting</Badge>
+            <Badge>Origin allow-list</Badge>
+            <Badge>Request IDs</Badge>
+            <Badge>AbortSignal end-to-end</Badge>
+            <Badge>SSE heartbeats</Badge>
+            <Badge>Singleflight stampede protection</Badge>
+            <Badge>RULES_VERSION cache invalidation</Badge>
+            <Badge>WCAG 2.1 AA</Badge>
+            <Badge>Playwright UI Health Check</Badge>
+          </div>
         </div>
-      )}
+      </section>
 
-      <AnimatePresence>{profile && (
-        <motion.div
-          className="mt-8 space-y-6"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.35 }}
-          key={apiResult?.generatedAtIso ?? 'profile'}>
-          {warnings && warnings.length > 0 && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800/60 dark:bg-amber-900/20 dark:text-amber-100">
-              <div className="font-semibold">Notes</div>
-              <ul className="mt-1 list-disc pl-5">
-                {warnings.map((w, i) => (
-                  <li key={i}>{w}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {isEdited && (
-            <div className="flex items-center justify-between rounded-xl border border-brand-200 bg-brand-50/60 p-3 text-sm text-brand-800 no-print dark:border-brand-900/60 dark:bg-brand-900/30 dark:text-brand-100">
-              <span>Profile has been edited — reports reflect your changes, not the original research.</span>
-              <button
-                type="button"
-                onClick={handleResetEdits}
-                className="rounded-md border border-brand-300 bg-white px-2 py-0.5 text-xs font-medium text-brand-700 hover:bg-brand-100 dark:border-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
-              >
-                Reset to research
-              </button>
-            </div>
-          )}
-
-          {editMode ? (
-            <EditableProfileForm
-              profile={profile}
-              onSave={handleSaveEdits}
-              onCancel={() => setEditMode(false)}
-            />
-          ) : (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setEditMode(true)}
-                className="absolute right-4 top-4 z-10 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 no-print dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
-              >
-                Edit profile
-              </button>
-              <ProfileCard profile={profile} />
-            </div>
-          )}
-
-          {/* Toolbar: tabs + transcript + share + clear */}
-          <div className="flex flex-wrap items-center justify-between gap-2 no-print">
-            <div className="inline-flex rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-              {(['reports', 'calendar'] as Tab[]).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setTab(t)}
-                  className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                    tab === t
-                      ? 'bg-brand-600 text-white'
-                      : 'text-slate-600 hover:text-slate-800 dark:text-slate-300 dark:hover:text-slate-100'
-                  }`}
-                >
-                  {t === 'reports' ? 'Reports' : 'Filing calendar'}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2">
-              {trace && (
-                <button
-                  type="button"
-                  onClick={() => setTranscriptOpen(true)}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
-                >
-                  Research transcript ({trace.searches.length})
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={handleCopyShareLink}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
-              >
-                {shareCopied ? 'Copied!' : 'Copy share link'}
-              </button>
-              <button
-                type="button"
-                onClick={handleClearPersisted}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
-              >
-                Clear saved
-              </button>
-            </div>
-          </div>
-
-          {/* Visual analytics — adapts to which tab is active */}
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <ReportsByJurisdictionChart reports={reports} />
-            <ReportsByFrequencyChart reports={reports} />
-            <AssetsByJurisdictionChart profile={profile} />
-          </div>
-
-          <div id={tab === 'reports' ? 'reports' : 'calendar'}>
-            {tab === 'reports' ? (
-              <ReportsList reports={reports} bankName={bankName} profile={profile} />
-            ) : (
-              <FilingCalendar reports={reports} />
-            )}
-          </div>
-
-          <div id="chat">
-            <FollowupChat profile={profile} reports={reports} />
-          </div>
-
-          <p className="pt-2 text-xs text-slate-400 dark:text-slate-500">
-            {apiResult
-              ? `Generated ${new Date(apiResult.generatedAtIso).toLocaleString()}`
-              : 'Local recompute'}
-            {apiResult?.fromCache ? ' · cached' : ''} · This tool is advisory only. Verify applicability with your
-            compliance team before filing.
+      {/* FINAL CTA =================================================== */}
+      <section className="bg-ink-900 py-24 text-white">
+        <div className="mx-auto max-w-3xl px-4 text-center">
+          <h2 className="font-display text-5xl font-extrabold tracking-tight sm:text-6xl">
+            Ready to analyze your first bank?
+          </h2>
+          <p className="mt-5 text-lg text-slate-300">
+            Enter any name — "HSBC", "HDFC Bank", "BNP Paribas", "Allianz", "Coinbase" — and watch the deep agent run in ~60 seconds.
           </p>
-        </motion.div>
-      )}
-      </AnimatePresence>
+          <div className="mt-10 flex flex-wrap justify-center gap-3">
+            <Link
+              href="/analyze"
+              className="inline-flex items-center gap-2 rounded-lg bg-accent-500 px-8 py-4 text-lg font-bold text-white shadow-xl shadow-accent-500/30 hover:-translate-y-0.5 hover:bg-accent-600"
+            >
+              Start an analysis →
+            </Link>
+            <Link
+              href="/compare"
+              className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/5 px-8 py-4 text-lg font-semibold text-white hover:border-brand-400 hover:bg-white/10"
+            >
+              Compare two banks
+            </Link>
+          </div>
+          <p className="mt-8 text-xs text-slate-500">
+            Advisory only. Verify every recommendation with your compliance team before filing.
+          </p>
+        </div>
+      </section>
+    </>
+  );
+}
 
-      {trace && (
-        <ResearchTranscript trace={trace} open={transcriptOpen} onClose={() => setTranscriptOpen(false)} />
-      )}
+function Stat({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 backdrop-blur">
+      <div className="text-3xl font-extrabold text-brand-400">{value}</div>
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-300">{label}</div>
+    </div>
+  );
+}
 
-      <CommandPalette
-        savedBanks={bankName ? [{ bankName, savedAtIso: new Date().toISOString() }] : []}
-        onAnalyze={(name) => {
-          void runAnalysis(name);
-        }}
-        onTheme={setThemeAndPersist}
-        onTab={setTab}
-        onCompare={() => {
-          window.location.href = '/compare';
-        }}
-        onTranscript={() => setTranscriptOpen(true)}
-        onExportCsv={() => {
-          // Switch to reports tab; the user can click the Export CSV button there.
-          setTab('reports');
-          requestAnimationFrame(() => {
-            document.getElementById('reports')?.scrollIntoView({ behavior: 'smooth' });
-          });
-        }}
-        onClearSaved={handleClearPersisted}
-      />
+function SectionEyebrow({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-brand-600 dark:text-brand-400">
+      <span className="h-px w-8 bg-brand-500" />
+      {children}
+    </span>
+  );
+}
 
-      <Footer />
+function FeatureCard({ icon, title, body }: { icon: string; title: string; body: string }) {
+  return (
+    <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand-300 hover:shadow-xl dark:border-slate-700 dark:bg-slate-900 dark:hover:border-brand-500">
+      <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-brand-50 text-2xl group-hover:bg-brand-100 dark:bg-brand-900/40 dark:group-hover:bg-brand-900/60">
+        {icon}
+      </div>
+      <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">{title}</h3>
+      <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{body}</p>
+    </div>
+  );
+}
 
-      {/* Sticky in-page nav — only when there are results */}
-      {profile && (
-        <nav className="fixed bottom-4 left-1/2 z-30 hidden -translate-x-1/2 rounded-full border border-slate-200 bg-white/90 px-3 py-1 text-xs shadow-lg backdrop-blur sm:block no-print dark:border-slate-700 dark:bg-slate-900/90">
-          <ul className="flex items-center gap-3">
-            <li>
-              <a href="#profile" className="text-slate-600 hover:text-brand-600 dark:text-slate-300">
-                Profile
-              </a>
-            </li>
-            <li className="text-slate-300 dark:text-slate-600">·</li>
-            <li>
-              <a href="#reports" className="text-slate-600 hover:text-brand-600 dark:text-slate-300">
-                Reports
-              </a>
-            </li>
-            <li className="text-slate-300 dark:text-slate-600">·</li>
-            <li>
-              <a href="#chat" className="text-slate-600 hover:text-brand-600 dark:text-slate-300">
-                Chat
-              </a>
-            </li>
-            {trace && (
-              <>
-                <li className="text-slate-300 dark:text-slate-600">·</li>
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => setTranscriptOpen(true)}
-                    className="text-slate-600 hover:text-brand-600 dark:text-slate-300"
-                  >
-                    Transcript
-                  </button>
-                </li>
-              </>
-            )}
-            <li className="text-slate-300 dark:text-slate-600">·</li>
-            <li>
-              <kbd className="rounded border border-slate-300 px-1 text-[10px] text-slate-500 dark:border-slate-600 dark:text-slate-400">
-                ⌘K
-              </kbd>
-            </li>
-          </ul>
-        </nav>
-      )}
-    </main>
+function StepCard({ step, title, body }: { step: string; title: string; body: string }) {
+  return (
+    <li className="flex gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-950">
+      <div className="shrink-0 font-display text-4xl font-extrabold text-brand-500">{step}</div>
+      <div>
+        <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">{title}</h3>
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{body}</p>
+      </div>
+    </li>
+  );
+}
+
+function MiniFeature({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-950">
+      <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">{title}</h4>
+      <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{body}</p>
+    </div>
+  );
+}
+
+function StackCard({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900">
+      <div className="text-base font-bold text-slate-900 dark:text-slate-100">{title}</div>
+      <div className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</div>
+    </div>
+  );
+}
+
+function Badge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-full border border-slate-200 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900">
+      {children}
+    </span>
   );
 }

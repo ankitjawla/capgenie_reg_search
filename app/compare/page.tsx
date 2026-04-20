@@ -99,7 +99,7 @@ export default function ComparePage() {
           </p>
         </div>
         <Link
-          href="/"
+          href="/analyze"
           className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
         >
           ← Single bank

@@ -123,7 +123,7 @@ export default function ReportDetailPage({ params }: Props) {
         </h2>
         <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">
           CapGenie&apos;s rules engine decides this per-bank based on jurisdiction, asset size, activities, and designations.
-          Run an analysis from the <Link href="/" className="text-brand-700 underline dark:text-brand-400">home page</Link> — if this report applies to that bank, you&apos;ll see it in the results with an &quot;applicability reason&quot; explaining why.
+          Run an analysis at <Link href="/analyze" className="text-brand-700 underline dark:text-brand-400">/analyze</Link> — if this report applies to that bank, you&apos;ll see it in the results with an &quot;applicability reason&quot; explaining why.
         </p>
       </section>
     </main>
