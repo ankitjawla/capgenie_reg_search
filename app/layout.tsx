@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import Toaster from '@/components/Toaster';
+import SiteHeader from '@/components/SiteHeader';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://capgenie-reg-search.vercel.app'),
@@ -40,6 +41,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen antialiased">
+        <SiteHeader />
         {children}
         <Toaster />
       </body>

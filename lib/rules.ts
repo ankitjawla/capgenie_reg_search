@@ -220,6 +220,34 @@ function usRules(profile: BankProfile): ReportRecommendation[] {
     );
   }
 
+  // ----- FDIC + OCC expanded -----
+  if (profile.isFDICInsured) {
+    out.push(
+      rec('US_FDIC_SDI', 'FDIC-insured institution — SDI aggregates populated from Call Reports.', 'low'),
+    );
+  }
+  if (assetsB >= 250) {
+    out.push(
+      rec('US_FDIC_165D', 'Bank holding company ≥ $250B assets — joint FDIC/FRB resolution plan required.'),
+    );
+  }
+  if (p.entityType === 'commercial_bank' && !isFBO) {
+    out.push(
+      rec('US_OCC_FAIR_ACCESS', 'National bank — annual fair-access attestation.', 'low'),
+    );
+  }
+
+  // ----- SEC (securities reporting for publicly-listed entities) -----
+  if (profile.isPubliclyListed) {
+    out.push(rec('US_SEC_10K', 'US publicly-listed entity — annual 10-K required.'));
+    out.push(rec('US_SEC_10Q', 'US publicly-listed entity — quarterly 10-Q required.'));
+    out.push(rec('US_SEC_8K', 'US publicly-listed entity — event-driven 8-K disclosures required.'));
+  }
+  if (profile.activities.includes('asset_management')) {
+    out.push(rec('US_SEC_13F', 'Institutional investment manager with ≥ $100M in 13(f) securities.', 'medium'));
+    out.push(rec('US_SEC_ADV', 'SEC-registered investment adviser — annual Form ADV.', 'medium'));
+  }
+
   // ----- BSA / AML — every U.S. bank -----
   out.push(rec('US_FINCEN_SAR', 'All U.S. banks must file SARs for suspicious activity.'));
   out.push(rec('US_FINCEN_CTR', 'All U.S. banks must file CTRs for cash transactions > $10,000.'));
@@ -309,6 +337,16 @@ function ukRules(profile: BankProfile): ReportRecommendation[] {
     );
   }
 
+  // PRA + FCA expanded
+  out.push(rec('UK_FCA_REGDATA', 'FCA-regulated firm — periodic RegData returns apply.'));
+  out.push(rec('UK_PRA_SMCR', 'PRA-designated senior management functions require annual SMCR certification.', 'medium'));
+  if (profile.category === 'life_insurer' || profile.category === 'property_casualty_insurer' || profile.category === 'reinsurer') {
+    out.push(rec('UK_PRA_SS25_15', 'UK-authorised insurer — PRA SS25/15 NST filings apply.'));
+  }
+  if (profile.hasBrokerDealerSubsidiary || profile.activities.includes('broker_dealer') || profile.activities.includes('custody_services')) {
+    out.push(rec('UK_FCA_CASS', 'Firm holds client money / securities — CASS resolution pack required.', 'medium'));
+  }
+
   return out;
 }
 
@@ -382,6 +420,34 @@ function euRules(profile: BankProfile): ReportRecommendation[] {
       'EU financial entity — DORA register of ICT third-party arrangements and incident reporting are mandatory.',
     ),
   );
+
+  // CBI (Ireland) — applies when HQ country is IE
+  if (profile.hqCountry === 'IE' || profile.hqCountry === 'IRL') {
+    out.push(rec('EU_CBI_PCF', 'Irish-regulated firm — CBI Fitness & Probity regime applies to senior roles.'));
+    out.push(rec('EU_CBI_PRISM', 'CBI PRISM supervisory reporting cadence depends on the firm\'s impact tier.'));
+    out.push(rec('EU_CBI_ICPG', 'Annual corporate governance compliance statement to the Central Bank of Ireland.', 'medium'));
+    if (profile.activities.includes('crypto_assets') || profile.entityType === 'crypto_firm') {
+      out.push(rec('EU_CBI_MICA_CASP', 'CBI is the Irish NCA for MiCA CASP authorisation + ongoing returns.'));
+    }
+  }
+
+  // ACPR (France) — applies when HQ country is FR
+  if (profile.hqCountry === 'FR' || profile.hqCountry === 'FRA') {
+    out.push(rec('EU_ACPR_SURFI', 'ACPR-supervised French bank — monthly SURFI returns alongside COREP/FINREP.'));
+    out.push(rec('EU_ACPR_RUBA', 'French bank balance-sheet granular reporting — RUBA replaces SURFI balance-sheet tables.'));
+    out.push(rec('EU_ACPR_RESOLUTION', 'Annual recovery & resolution plan submission to ACPR.', 'medium'));
+  }
+
+  // AMF (France) — applies when entity is listed on Euronext Paris / French asset manager
+  if (
+    (profile.hqCountry === 'FR' || profile.hqCountry === 'FRA') &&
+    (profile.isPubliclyListed || profile.activities.includes('asset_management'))
+  ) {
+    out.push(rec('EU_AMF_RAI', 'French-listed issuer / asset manager — annual AMF information report.', 'medium'));
+    if (profile.activities.includes('derivatives_trading')) {
+      out.push(rec('EU_AMF_POSITION_REPORTING', 'Commodity derivatives traded on French venues — daily AMF position reporting.'));
+    }
+  }
 
   // FATCA / CRS
   out.push(rec('EU_FATCA_CRS', 'EU credit institutions are reporting financial institutions under CRS and FATCA.'));

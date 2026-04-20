@@ -803,4 +803,267 @@ export const REPORT_CATALOG: Record<string, CatalogEntry> = {
       'SAR, CTR, and Form 8300 filings for money-services businesses (including many crypto firms) under 31 CFR §1022.',
     frequency: 'event_driven',
   },
+
+  // ============================================================
+  // SEC — Securities and Exchange Commission
+  // ============================================================
+  US_SEC_10K: {
+    id: 'US_SEC_10K',
+    jurisdiction: 'US',
+    regulator: 'SEC',
+    shortName: 'Form 10-K',
+    fullName: 'Annual Report Pursuant to Section 13 or 15(d)',
+    description:
+      'Annual comprehensive report filed by US public companies — audited financials, MD&A, risk factors, and governance disclosures.',
+    frequency: 'annual',
+    referenceUrl: 'https://www.sec.gov/forms',
+  },
+  US_SEC_10Q: {
+    id: 'US_SEC_10Q',
+    jurisdiction: 'US',
+    regulator: 'SEC',
+    shortName: 'Form 10-Q',
+    fullName: 'Quarterly Report Pursuant to Section 13 or 15(d)',
+    description:
+      'Unaudited quarterly financial statements + MD&A for US public companies between 10-Ks.',
+    frequency: 'quarterly',
+  },
+  US_SEC_8K: {
+    id: 'US_SEC_8K',
+    jurisdiction: 'US',
+    regulator: 'SEC',
+    shortName: 'Form 8-K',
+    fullName: 'Current Report',
+    description:
+      'Event-driven disclosures (material agreements, management changes, bankruptcy, etc.) filed within 4 business days.',
+    frequency: 'event_driven',
+  },
+  US_SEC_13F: {
+    id: 'US_SEC_13F',
+    jurisdiction: 'US',
+    regulator: 'SEC',
+    shortName: 'Form 13F',
+    fullName: 'Quarterly Report of Institutional Investment Managers',
+    description:
+      'Quarterly holdings disclosure by institutional investment managers with ≥ $100M in 13(f)-securities.',
+    frequency: 'quarterly',
+  },
+  US_SEC_13DG: {
+    id: 'US_SEC_13DG',
+    jurisdiction: 'US',
+    regulator: 'SEC',
+    shortName: 'Schedule 13D / 13G',
+    fullName: 'Beneficial Ownership Reports',
+    description:
+      'Filed within 10 days (13D) or annually (13G) by any person/entity that acquires ≥ 5% of a public company\'s voting securities.',
+    frequency: 'event_driven',
+  },
+  US_SEC_ADV: {
+    id: 'US_SEC_ADV',
+    jurisdiction: 'US',
+    regulator: 'SEC',
+    shortName: 'Form ADV',
+    fullName: 'Uniform Application for Investment Adviser Registration',
+    description:
+      'Annual registration + brochure (Parts 1 & 2) for SEC-registered investment advisers; filed via IARD.',
+    frequency: 'annual',
+  },
+  US_SEC_N1A: {
+    id: 'US_SEC_N1A',
+    jurisdiction: 'US',
+    regulator: 'SEC',
+    shortName: 'Form N-1A',
+    fullName: 'Registration Statement for Open-End Management Investment Companies',
+    description:
+      'Mutual-fund prospectus + statement of additional information filing; required for open-end funds.',
+    frequency: 'annual',
+  },
+
+  // ============================================================
+  // FDIC — expanded
+  // ============================================================
+  US_FDIC_SDI: {
+    id: 'US_FDIC_SDI',
+    jurisdiction: 'US',
+    regulator: 'FDIC',
+    shortName: 'SDI',
+    fullName: 'Statistics on Depository Institutions',
+    description:
+      'Quarterly aggregated financial data on FDIC-insured banks, published for transparency and peer benchmarking.',
+    frequency: 'quarterly',
+    referenceUrl: 'https://banks.data.fdic.gov/',
+  },
+  US_FDIC_165D: {
+    id: 'US_FDIC_165D',
+    jurisdiction: 'US',
+    regulator: 'FDIC',
+    shortName: 'Resolution Plan',
+    fullName: 'Section 165(d) Resolution Plan',
+    description:
+      'Joint FDIC/FRB resolution planning submission for bank holding companies with ≥ $250B in assets.',
+    frequency: 'annual',
+  },
+
+  // ============================================================
+  // OCC — expanded
+  // ============================================================
+  US_OCC_FAIR_ACCESS: {
+    id: 'US_OCC_FAIR_ACCESS',
+    jurisdiction: 'US',
+    regulator: 'OCC',
+    shortName: 'Fair Access',
+    fullName: 'Fair Access to Financial Services Attestation',
+    description:
+      'OCC-required attestation for national banks demonstrating non-discriminatory service delivery.',
+    frequency: 'annual',
+  },
+
+  // ============================================================
+  // UK — PRA / FCA expanded
+  // ============================================================
+  UK_PRA_SS25_15: {
+    id: 'UK_PRA_SS25_15',
+    jurisdiction: 'UK',
+    regulator: 'PRA',
+    shortName: 'SS25/15 NSTs',
+    fullName: 'PRA Supervisory Statement 25/15 — National Specific Templates',
+    description:
+      'UK-specific Solvency II national-specific templates for PRA-authorised insurers.',
+    frequency: 'quarterly',
+  },
+  UK_PRA_SMCR: {
+    id: 'UK_PRA_SMCR',
+    jurisdiction: 'UK',
+    regulator: 'PRA',
+    shortName: 'SMCR returns',
+    fullName: 'Senior Managers & Certification Regime filings',
+    description:
+      'Annual SMCR conduct certification + notifications for certified persons at PRA-designated senior management functions.',
+    frequency: 'annual',
+  },
+  UK_FCA_REGDATA: {
+    id: 'UK_FCA_REGDATA',
+    jurisdiction: 'UK',
+    regulator: 'FCA',
+    shortName: 'RegData',
+    fullName: 'FCA RegData Periodic Returns',
+    description:
+      'Ongoing prudential and conduct returns filed through the FCA RegData platform — replaced GABRIEL in 2021.',
+    frequency: 'quarterly',
+  },
+  UK_FCA_CASS: {
+    id: 'UK_FCA_CASS',
+    jurisdiction: 'UK',
+    regulator: 'FCA',
+    shortName: 'CASS Resolution',
+    fullName: 'CASS Resolution Pack',
+    description:
+      'Client assets safeguarding documentation required of any CASS-designated firm holding client money/securities.',
+    frequency: 'annual',
+  },
+
+  // ============================================================
+  // EU — Central Bank of Ireland (CBI)
+  // ============================================================
+  EU_CBI_PCF: {
+    id: 'EU_CBI_PCF',
+    jurisdiction: 'EU',
+    regulator: 'CBI',
+    shortName: 'F&P PCF',
+    fullName: 'Fitness & Probity — Pre-Approval Controlled Function notifications',
+    description:
+      'CBI approval required for individuals taking up Pre-Approval Controlled Functions at regulated Irish financial firms.',
+    frequency: 'event_driven',
+    referenceUrl: 'https://www.centralbank.ie/',
+  },
+  EU_CBI_PRISM: {
+    id: 'EU_CBI_PRISM',
+    jurisdiction: 'EU',
+    regulator: 'CBI',
+    shortName: 'PRISM returns',
+    fullName: 'Probability Risk and Impact SysteM supervisory returns',
+    description:
+      'Risk-based supervisory reporting under the CBI PRISM framework — frequency depends on impact tier (High / Medium-High / Medium-Low / Low).',
+    frequency: 'quarterly',
+  },
+  EU_CBI_ICPG: {
+    id: 'EU_CBI_ICPG',
+    jurisdiction: 'EU',
+    regulator: 'CBI',
+    shortName: 'ICPG',
+    fullName: 'Irish Corporate Governance Requirements Annual Report',
+    description:
+      'Annual corporate governance compliance statement for banks and insurers under CBI Corporate Governance Requirements.',
+    frequency: 'annual',
+  },
+  EU_CBI_MICA_CASP: {
+    id: 'EU_CBI_MICA_CASP',
+    jurisdiction: 'EU',
+    regulator: 'CBI',
+    shortName: 'MiCA CASP (Ireland)',
+    fullName: 'MiCA CASP Authorisation + Ongoing Returns — CBI',
+    description:
+      'CBI is the Irish NCA for Markets in Crypto-Assets authorisations; ongoing capital, safeguarding + disclosure returns apply.',
+    frequency: 'quarterly',
+  },
+
+  // ============================================================
+  // EU — ACPR (France)
+  // ============================================================
+  EU_ACPR_SURFI: {
+    id: 'EU_ACPR_SURFI',
+    jurisdiction: 'EU',
+    regulator: 'ACPR',
+    shortName: 'SURFI',
+    fullName: 'Système Unifié de Reporting Financier',
+    description:
+      'Monthly / quarterly French prudential statistical reporting for ACPR-supervised banks, complementing COREP / FINREP.',
+    frequency: 'monthly',
+    referenceUrl: 'https://acpr.banque-france.fr/',
+  },
+  EU_ACPR_RUBA: {
+    id: 'EU_ACPR_RUBA',
+    jurisdiction: 'EU',
+    regulator: 'ACPR',
+    shortName: 'RUBA',
+    fullName: 'Reporting Unifié des Banques et Assimilés',
+    description:
+      'Granular monthly balance-sheet return introduced in 2022, replacing SURFI balance-sheet tables for ACPR banks.',
+    frequency: 'monthly',
+  },
+  EU_ACPR_RESOLUTION: {
+    id: 'EU_ACPR_RESOLUTION',
+    jurisdiction: 'EU',
+    regulator: 'ACPR',
+    shortName: 'Resolution Plan (FR)',
+    fullName: 'Plan préventif de rétablissement + résolution',
+    description:
+      'Annual recovery & resolution planning submission to ACPR for French credit institutions.',
+    frequency: 'annual',
+  },
+
+  // ============================================================
+  // EU — AMF (France) — market regulator
+  // ============================================================
+  EU_AMF_RAI: {
+    id: 'EU_AMF_RAI',
+    jurisdiction: 'EU',
+    regulator: 'AMF',
+    shortName: 'AMF RAI',
+    fullName: 'Rapport Annuel d\'Information — AMF',
+    description:
+      'Annual information document filed by French-listed issuers and certain asset managers with the AMF.',
+    frequency: 'annual',
+    referenceUrl: 'https://www.amf-france.org/',
+  },
+  EU_AMF_POSITION_REPORTING: {
+    id: 'EU_AMF_POSITION_REPORTING',
+    jurisdiction: 'EU',
+    regulator: 'AMF',
+    shortName: 'AMF Position Reporting',
+    fullName: 'Daily position reporting on regulated markets',
+    description:
+      'Daily position limit + reporting obligations for persons trading commodity derivatives on French venues under MiFID II Article 58.',
+    frequency: 'daily',
+  },
 };

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Command } from 'cmdk';
+import { REGULATORS } from '@/lib/regulators';
 
 interface SavedBank {
   bankName: string;
@@ -122,6 +123,39 @@ export default function CommandPalette({
               <Command.Item onSelect={() => run(onExportCsv)} className={ITEM_CLASS}>
                 Export reports as CSV
               </Command.Item>
+              <Command.Item
+                onSelect={() =>
+                  run(() => {
+                    window.location.href = '/regulators';
+                  })
+                }
+                className={ITEM_CLASS}
+              >
+                Browse all regulators
+              </Command.Item>
+            </Command.Group>
+
+            <Command.Group heading="Jump to regulator">
+              {REGULATORS.slice(0, 20).map((r) => (
+                <Command.Item
+                  key={r.slug}
+                  value={`regulator ${r.name} ${r.slug}`}
+                  onSelect={() =>
+                    run(() => {
+                      window.location.href = `/regulator/${r.slug}`;
+                    })
+                  }
+                  className={ITEM_CLASS}
+                >
+                  <span className="mr-2" aria-hidden>
+                    {r.emoji}
+                  </span>
+                  {r.name}
+                  <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">
+                    {r.jurisdictions.join('·')}
+                  </span>
+                </Command.Item>
+              ))}
             </Command.Group>
 
             <Command.Group heading="Theme">

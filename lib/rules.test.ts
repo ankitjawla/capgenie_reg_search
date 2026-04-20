@@ -238,6 +238,73 @@ describe('applyRules', () => {
     expect(result).not.toContain('US_FR_Y_9C');
   });
 
+  it('US publicly-listed BHC gets SEC 10-K/10-Q/8-K', () => {
+    const result = ids(
+      buildProfile({
+        legalName: 'JPMorgan Chase',
+        hqCountry: 'US',
+        category: 'bank_holding_company',
+        assetSizeTier: 'gt_700B',
+        globalAssetsUsdB: 3900,
+        isPubliclyListed: true,
+        isFDICInsured: true,
+        presence: [{ jurisdiction: 'US', entityType: 'bank_holding_company', jurisdictionAssetsUsdB: 3400 }],
+        activities: ['asset_management', 'broker_dealer'],
+      }),
+    );
+    expect(result).toContain('US_SEC_10K');
+    expect(result).toContain('US_SEC_10Q');
+    expect(result).toContain('US_SEC_8K');
+    expect(result).toContain('US_SEC_ADV');
+    expect(result).toContain('US_SEC_13F');
+  });
+
+  it('Irish-headquartered bank gets CBI PCF + PRISM + EU COREP', () => {
+    const result = ids(
+      buildProfile({
+        legalName: 'AIB plc',
+        hqCountry: 'IE',
+        category: 'commercial_bank',
+        assetSizeTier: '100B_to_250B',
+        globalAssetsUsdB: 130,
+        isDSIB: true,
+        presence: [{ jurisdiction: 'EU', entityType: 'commercial_bank', jurisdictionAssetsUsdB: 130 }],
+        activities: ['retail_deposits', 'commercial_lending', 'mortgage_lending'],
+      }),
+    );
+    expect(result).toContain('EU_CBI_PCF');
+    expect(result).toContain('EU_CBI_PRISM');
+    expect(result).toContain('EU_CBI_ICPG');
+    expect(result).toContain('EU_COREP');
+  });
+
+  it('French-headquartered bank gets ACPR SURFI/RUBA + resolution plan', () => {
+    const result = ids(
+      buildProfile({
+        legalName: 'BNP Paribas',
+        hqCountry: 'FR',
+        category: 'bank_holding_company',
+        assetSizeTier: 'gt_700B',
+        globalAssetsUsdB: 2600,
+        isGSIB: true,
+        isPubliclyListed: true,
+        presence: [{ jurisdiction: 'EU', entityType: 'bank_holding_company', jurisdictionAssetsUsdB: 2200 }],
+        activities: [
+          'commercial_lending',
+          'mortgage_lending',
+          'derivatives_trading',
+          'securities_underwriting',
+          'asset_management',
+        ],
+      }),
+    );
+    expect(result).toContain('EU_ACPR_SURFI');
+    expect(result).toContain('EU_ACPR_RUBA');
+    expect(result).toContain('EU_ACPR_RESOLUTION');
+    expect(result).toContain('EU_AMF_RAI');
+    expect(result).toContain('EU_AMF_POSITION_REPORTING');
+  });
+
   it('bank with no US/UK/EU/IN presence returns an empty list', () => {
     const result = ids(
       buildProfile({

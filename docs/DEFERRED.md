@@ -72,6 +72,32 @@ Add:
   through the results, open palette, close it — assert focus never leaves
   visible elements.
 
+## Evidence-citation sub-agent (was planned as Phase R3)
+
+**Why deferred.** The Phase R3 design adds a new node to the LangGraph
+between `verifier` and `synthesizer` that cross-links each rules-engine
+recommendation back to a specific regulation section. This requires:
+- a new Zod `CitationBundle` schema propagated through graph state
+- a restructured synthesizer (draft → annotate → final)
+- UI drawer updates to render `citation.regulationSection` + `quote`
+
+Non-trivial graph + schema changes that risk destabilizing the current
+multi-node flow. Decoupling it from the regulator-browser round keeps the
+release safe. Ship as its own follow-up.
+
+**Trigger criteria.** Revisit when (a) users frequently ask "where does
+this rule come from?" or (b) we ship a two-model diff that needs cite-level
+evidence to compare.
+
+## Build-time regulator bio generation (was planned)
+
+**Why deferred.** Script is straightforward but requires a new
+`scripts/generate-regulator-bios.ts` + `build:bios` npm script + Vercel
+build-phase setup. The hardcoded bios in `lib/regulators.ts` are already
+good (~2–3 sentences each) and cost nothing. The LLM-generated path only
+matters if we later want to refresh bios periodically or expand to
+50+ regulators.
+
 ## Sentry spans per graph node
 
 Today Sentry captures exceptions. To see *which* researcher is slow, wrap
