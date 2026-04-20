@@ -7,6 +7,7 @@ import { getClientKey, rateLimit } from '@/lib/rate-limit';
 import { cacheGet, cachePut, singleflight, RULES_VERSION } from '@/lib/db';
 import { analyzeRequestSchema } from '@/lib/validation';
 import { isOriginAllowed } from '@/lib/origin-check';
+import { annotateWithEvidence } from '@/lib/agent/evidence';
 
 export const runtime = 'nodejs';
 export const maxDuration = 180;
@@ -133,7 +134,13 @@ export async function POST(req: Request) {
             requestId,
           });
           flushText();
-          const reports = applyRules(profile);
+          let reports = applyRules(profile);
+          // Post-synthesis evidence-citation pass — non-fatal if it fails.
+          send({ type: 'info', message: 'Linking reports to cited sources…' });
+          reports = await annotateWithEvidence(profile, reports, {
+            signal: controllerAbort.signal,
+            requestId,
+          });
           const warnings: string[] = [];
           if (profile.assetSizeTier === 'unknown') {
             warnings.push('Asset size could not be determined; report thresholds may be approximate.');

@@ -334,6 +334,20 @@ export const REGULATORS: RegulatorMeta[] = [
   },
 ];
 
+// Optional build-time-generated bios. `lib/regulators-bios.json` starts
+// empty ({}) and is rewritten by `npm run build:bios`. When a slug is
+// absent we fall back to the hardcoded `shortBio` below.
+import biosOverrides from './regulators-bios.json';
+
+const BIO_OVERRIDES = biosOverrides as Record<string, string>;
+
 export function findRegulatorBySlug(slug: string): RegulatorMeta | undefined {
-  return REGULATORS.find((r) => r.slug === slug);
+  const base = REGULATORS.find((r) => r.slug === slug);
+  if (!base) return undefined;
+  const override = BIO_OVERRIDES[slug];
+  return override ? { ...base, shortBio: override } : base;
+}
+
+export function regulatorBio(slug: string): string {
+  return BIO_OVERRIDES[slug] ?? REGULATORS.find((r) => r.slug === slug)?.shortBio ?? '';
 }

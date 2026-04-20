@@ -72,6 +72,29 @@ Add:
   through the results, open palette, close it — assert focus never leaves
   visible elements.
 
+## Full 30-researcher per-regulator fan-out
+
+**Status.** Partial version shipped: each of the 7 jurisdiction researchers
+now receives regulator-specific hints in its prompt (name, website, bio)
+drawn from `lib/regulators.ts`. This gives the agent regulator expertise
+without changing the graph topology.
+
+**Why the full 30-node version is still deferred.** Fanning out from 7 to
+~30 parallel researcher nodes means 30 concurrent Azure calls on the
+critical path. Our current Azure deployment's TPM budget can't sustain
+that without triggering rate limits, and even with backoff the latency
+would get worse (more retries). Also, most regulators wouldn't apply to a
+given bank — many nodes would short-circuit immediately, which is wasted
+graph complexity.
+
+**When to revisit.** Once (a) the deployment has a higher TPM tier or
+(b) we implement per-regulator backoff with a shared token-bucket across
+nodes. Then switching each researcher to a single-regulator scope makes
+sense: sharper retrieval, clearer traces, easier debugging per regulator.
+
+**Feature flag sketch.** If we ship it, gate behind `DEEP_AGENT_MODE=regulator`
+in `lib/agent/graph.ts`. Default stays on jurisdiction mode.
+
 ## Evidence-citation sub-agent (was planned as Phase R3)
 
 **Why deferred.** The Phase R3 design adds a new node to the LangGraph

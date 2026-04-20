@@ -277,6 +277,31 @@ function ReportRow({
           </button>
           {expanded && (
             <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-200">
+              {r.citation && (
+                <div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 p-2 dark:border-emerald-800/60 dark:bg-emerald-900/30">
+                  <div className="flex items-center gap-1 font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-200">
+                    ✓ Cited evidence
+                  </div>
+                  {r.citation.regulationSection && (
+                    <div className="mt-1 font-mono text-[11px] text-emerald-900 dark:text-emerald-100">
+                      {r.citation.regulationSection}
+                    </div>
+                  )}
+                  {r.citation.quote && (
+                    <blockquote className="mt-1 border-l-2 border-emerald-300 pl-2 italic text-emerald-900 dark:border-emerald-700 dark:text-emerald-100">
+                      &ldquo;{r.citation.quote}&rdquo;
+                    </blockquote>
+                  )}
+                  <a
+                    href={r.citation.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1 inline-block text-[11px] text-emerald-700 underline decoration-emerald-300 underline-offset-2 hover:decoration-emerald-600 dark:text-emerald-300"
+                  >
+                    {r.citation.sourceTitle ?? r.citation.sourceUrl} ↗
+                  </a>
+                </div>
+              )}
               {evidence.length > 0 && (
                 <div>
                   <div className="font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">

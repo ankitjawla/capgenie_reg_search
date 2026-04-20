@@ -14,6 +14,7 @@ import { analyses, rowToAnalysisResult, type NewAnalysisRow } from './schema';
 import type { AnalysisResult } from '../types';
 import { logJson } from '../errors';
 import { RULES_VERSION } from '../rules-version';
+import { canonicalName } from '../canonical-name';
 
 const DATABASE_URL = process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? null;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -37,14 +38,15 @@ const mem = new Map<string, MemEntry>();
 const inflight = new Map<string, Promise<AnalysisResult>>();
 
 function cacheKey(bankName: string): string {
-  // TODO(canonical-entity): this still keys on normalized text. The review
-  // calls for a LEI / canonical-name lookup before hashing — tracked in
-  // docs/DEFERRED.md.
-  return `${RULES_VERSION}|${bankName.trim().toLowerCase()}`;
+  // LEI-lite canonical text normalization — strips corporate suffixes so
+  // "JPMorgan Chase & Co." and "JPMorgan Chase" hit the same cache entry.
+  // Full GLEIF LEI lookup is still deferred (docs/DEFERRED.md), but this
+  // kills the biggest class of near-duplicate misses.
+  return `${RULES_VERSION}|${canonicalName(bankName)}`;
 }
 
 function normalizedName(bankName: string): string {
-  return bankName.trim().toLowerCase();
+  return canonicalName(bankName);
 }
 
 export async function cacheGet(bankName: string): Promise<AnalysisResult | null> {

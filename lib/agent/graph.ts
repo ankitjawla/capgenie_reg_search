@@ -26,6 +26,21 @@ import { bankProfileSchema, makeWebSearchTool } from './tools';
 import type { BankProfile, Jurisdiction, SearchStep } from '../types';
 import type { BingSearchResult } from '../bing';
 import { logJson } from '../errors';
+import { REGULATORS } from '../regulators';
+
+/**
+ * Regulator hints injected into each jurisdiction researcher's prompt.
+ * This is a pragmatic substitute for the full "one researcher per
+ * regulator" architecture — we get regulator-specific retrieval guidance
+ * without the 30× Azure fan-out risk.
+ */
+function regulatorHintsFor(jur: Jurisdiction): string {
+  const regs = REGULATORS.filter((r) => r.jurisdictions.includes(jur));
+  if (regs.length === 0) return '';
+  return regs
+    .map((r) => `- ${r.name} (${r.website}): ${r.shortBio}`)
+    .join('\n');
+}
 
 const ALL_JURISDICTIONS: Jurisdiction[] = ['US', 'UK', 'EU', 'IN', 'CA', 'SG', 'HK'];
 
@@ -147,22 +162,26 @@ async function plannerNode(state: State, llm: AzureChatOpenAI): Promise<Partial<
 
 // --- Researcher (factory — one per jurisdiction) ---------------------------
 
-const RESEARCHER_PROMPT = (j: Jurisdiction, identityNotes: string, bankName: string) => `You are the ${j}-jurisdiction researcher for a deep regulatory-research agent.
+const RESEARCHER_PROMPT = (j: Jurisdiction, identityNotes: string, bankName: string) => `You are the ${j}-jurisdiction researcher for a deep regulatory-research agent. You are expert on the regulators below — you know their websites, their most-important reports, and the thresholds that trigger applicability.
+
+REGULATORS IN ${j}:
+${regulatorHintsFor(j)}
 
 Bank under investigation: "${bankName}".
 Planner's identity notes: ${identityNotes}
 
-Your job: determine whether this bank has a regulated presence in ${j} and, if so, gather the facts a regulator would care about.
+Your job: determine whether this bank has a regulated presence in ${j} and, if so, gather the facts a regulator would care about — per-regulator where possible.
 
 Steps:
-1. Run 2-4 focused web_search queries to investigate ${j} presence. Prefer primary sources — regulator registries (FDIC / FRB / OCC / PRA / ECB / RBI), the bank's annual report, and investor-relations pages.
-2. If you find regulated presence in ${j}, note:
-   - Entity type (subsidiary IHC, foreign branch / FBO, commercial bank, bank holding company, etc.)
+1. Run 2-4 focused web_search queries. Where possible, scope a query to a single regulator's primary-source domain (e.g. site:fdic.gov, site:bankofengland.co.uk, site:rbi.org.in, site:acpr.banque-france.fr, site:centralbank.ie).
+2. If you find regulated presence in ${j}, note per-regulator:
+   - Which of the regulators above the bank answers to
+   - Entity type (subsidiary IHC, foreign branch / FBO, commercial bank, bank holding company, insurer, crypto firm, etc.)
    - Approximate assets in ${j} in USD billions
-   - Any ${j}-specific designations (FDIC insured, D-SIB, G-SIB, FBO branch vs IHC, PRA/FCA dual-regulated, etc.)
+   - Any ${j}-specific designations (FDIC insured, D-SIB, G-SIB, FBO branch vs IHC, PRA/FCA dual-regulated, CBI impact tier, ACPR significant institution, etc.)
 3. If you do NOT find regulated presence in ${j}, say so explicitly — don't invent one.
 
-Respond with a structured plain-text report (no markdown). Include the URLs of the sources you used inline. Your report will be fed into the verifier.`;
+Respond with a structured plain-text report (no markdown). Include the URLs of the sources you used inline, and cite the specific regulator name(s) that apply. Your report will be fed into the verifier.`;
 
 function makeResearcherNode(
   jur: Jurisdiction,

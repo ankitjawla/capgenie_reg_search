@@ -1,0 +1,184 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`golden fixtures > produces stable rules output for barclays 1`] = `
+{
+  "bank": "barclays",
+  "byJurisdiction": {
+    "EU": 9,
+    "UK": 7,
+    "US": 20,
+  },
+  "reportCount": 36,
+  "reportIds": [
+    "EU_ALMM",
+    "EU_ANACREDIT",
+    "EU_COREP",
+    "EU_DORA_REGISTER",
+    "EU_FATCA_CRS",
+    "EU_FINREP",
+    "EU_LCR",
+    "EU_MIFIR",
+    "EU_PILLAR3",
+    "UK_FCA_CASS",
+    "UK_FCA_REGDATA",
+    "UK_FSA047_048",
+    "UK_MLAR",
+    "UK_PRA110",
+    "UK_PRA_SMCR",
+    "UK_RFB",
+    "US_FDIC_165D",
+    "US_FFIEC_002",
+    "US_FFIEC_009",
+    "US_FFIEC_101",
+    "US_FFIEC_102",
+    "US_FINCEN_CTR",
+    "US_FINCEN_SAR",
+    "US_FR_2052A",
+    "US_FR_2900",
+    "US_FR_Y_14A",
+    "US_FR_Y_14M",
+    "US_FR_Y_14Q",
+    "US_FR_Y_15",
+    "US_HMDA_LAR",
+    "US_SEC_10K",
+    "US_SEC_10Q",
+    "US_SEC_13F",
+    "US_SEC_8K",
+    "US_SEC_ADV",
+    "US_TIC_BL",
+  ],
+}
+`;
+
+exports[`golden fixtures > produces stable rules output for dbs-bank 1`] = `
+{
+  "bank": "dbs-bank",
+  "byJurisdiction": {
+    "SG": 5,
+  },
+  "reportCount": 5,
+  "reportIds": [
+    "SG_MAS_610",
+    "SG_MAS_637",
+    "SG_MAS_757",
+    "SG_MAS_LCR",
+    "SG_STR",
+  ],
+}
+`;
+
+exports[`golden fixtures > produces stable rules output for hdfc-bank 1`] = `
+{
+  "bank": "hdfc-bank",
+  "byJurisdiction": {
+    "IN": 16,
+  },
+  "reportCount": 16,
+  "reportIds": [
+    "IN_ALM_RETURNS",
+    "IN_BSR1",
+    "IN_BSR2",
+    "IN_CRILC",
+    "IN_DSB_RETURNS",
+    "IN_FATCA_CRS",
+    "IN_FIU_CTR_STR",
+    "IN_FOREIGN_EXPOSURE",
+    "IN_FORM_A_CRR",
+    "IN_FORM_VIII_SLR",
+    "IN_FORM_X",
+    "IN_ICAAP",
+    "IN_LCR_NSFR",
+    "IN_LFAR",
+    "IN_PSL_RETURN",
+    "IN_RBS_TRANCHE",
+  ],
+}
+`;
+
+exports[`golden fixtures > produces stable rules output for hsbc-hk 1`] = `
+{
+  "bank": "hsbc-hk",
+  "byJurisdiction": {
+    "HK": 5,
+  },
+  "reportCount": 5,
+  "reportIds": [
+    "HK_CAR",
+    "HK_DISCLOSURE",
+    "HK_JFIU",
+    "HK_LMR",
+    "HK_MA_BS1",
+  ],
+}
+`;
+
+exports[`golden fixtures > produces stable rules output for jpmorgan 1`] = `
+{
+  "bank": "jpmorgan",
+  "byJurisdiction": {
+    "EU": 9,
+    "UK": 7,
+    "US": 24,
+  },
+  "reportCount": 40,
+  "reportIds": [
+    "EU_ALMM",
+    "EU_ANACREDIT",
+    "EU_COREP",
+    "EU_DORA_REGISTER",
+    "EU_FATCA_CRS",
+    "EU_FINREP",
+    "EU_LCR",
+    "EU_MIFIR",
+    "EU_PILLAR3",
+    "UK_FCA_CASS",
+    "UK_FCA_REGDATA",
+    "UK_FSA047_048",
+    "UK_MLAR",
+    "UK_PRA110",
+    "UK_PRA_SMCR",
+    "UK_RFB",
+    "US_CRA",
+    "US_FDIC_165D",
+    "US_FDIC_SDI",
+    "US_FFIEC_009",
+    "US_FFIEC_031",
+    "US_FFIEC_101",
+    "US_FFIEC_102",
+    "US_FINCEN_CTR",
+    "US_FINCEN_SAR",
+    "US_FR_2052A",
+    "US_FR_2900",
+    "US_FR_Y_14A",
+    "US_FR_Y_14M",
+    "US_FR_Y_14Q",
+    "US_FR_Y_15",
+    "US_FR_Y_9C",
+    "US_FR_Y_9LP",
+    "US_HMDA_LAR",
+    "US_SEC_10K",
+    "US_SEC_10Q",
+    "US_SEC_13F",
+    "US_SEC_8K",
+    "US_SEC_ADV",
+    "US_TIC_BL",
+  ],
+}
+`;
+
+exports[`golden fixtures > produces stable rules output for rbc 1`] = `
+{
+  "bank": "rbc",
+  "byJurisdiction": {
+    "CA": 5,
+  },
+  "reportCount": 5,
+  "reportIds": [
+    "CA_A2_A1",
+    "CA_CAR",
+    "CA_FINTRAC_LCTR",
+    "CA_LCR_NSFR",
+    "CA_LRR",
+  ],
+}
+`;

@@ -123,6 +123,16 @@ export interface ReportRecommendation {
   // 'assetSizeTier', 'activities.mortgage_lending', 'presence.US.entityType'.
   // Used to render "Why this report?" drawers and cross-link to sources.
   evidenceFieldIds: string[];
+  // Optional citation from the evidence-citer agent pass — points to the
+  // regulator-primary-source URL in `profile.sources` that substantiates
+  // this specific recommendation. Populated when the post-synthesis
+  // evidence-citer runs successfully.
+  citation?: {
+    sourceUrl: string;
+    sourceTitle?: string;
+    regulationSection?: string;
+    quote?: string;
+  };
 }
 
 export interface SearchStep {

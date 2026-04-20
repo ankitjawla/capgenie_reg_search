@@ -8,6 +8,7 @@ import { getClientKey, rateLimit } from '@/lib/rate-limit';
 import { cacheGet, cachePut, singleflight, RULES_VERSION } from '@/lib/db';
 import { analyzeRequestSchema } from '@/lib/validation';
 import { isOriginAllowed } from '@/lib/origin-check';
+import { annotateWithEvidence } from '@/lib/agent/evidence';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -65,7 +66,8 @@ export async function POST(req: Request) {
         signal: req.signal,
         requestId,
       });
-      const reports = applyRules(profile);
+      let reports = applyRules(profile);
+      reports = await annotateWithEvidence(profile, reports, { signal: req.signal, requestId });
       const warnings: string[] = [];
       if (profile.assetSizeTier === 'unknown') {
         warnings.push('Asset size could not be determined; report thresholds may be approximate.');

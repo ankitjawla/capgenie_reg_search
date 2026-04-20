@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "ui-check": "playwright test --config=playwright.config.ts",
     "ui-check:prod": "UI_CHECK_URL=https://capgenie-reg-search.vercel.app playwright test --config=playwright.config.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:bios": "tsx scripts/generate-regulator-bios.ts"
   },
   "dependencies": {
     "@langchain/core": "^1.1.40",
