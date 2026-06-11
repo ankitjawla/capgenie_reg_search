@@ -145,6 +145,47 @@ export async function singleflight(
 }
 
 /**
+ * Return the most-recent analyses across every bank — newest first.
+ * Used by the global /history page.
+ */
+export async function recentAnalyses(limit = 50) {
+  if (!db) return [];
+  try {
+    const rows = await db
+      .select({
+        id: analyses.id,
+        bankName: analyses.bankName,
+        rulesVersion: analyses.rulesVersion,
+        generatedAtIso: analyses.generatedAtIso,
+        createdAt: analyses.createdAt,
+        profile: analyses.profile,
+        reportCount: analyses.reports,
+      })
+      .from(analyses)
+      .orderBy(desc(analyses.createdAt))
+      .limit(limit);
+    return rows.map((r) => ({
+      id: r.id,
+      bankName: r.bankName,
+      rulesVersion: r.rulesVersion,
+      generatedAtIso: r.generatedAtIso,
+      createdAtIso: r.createdAt.toISOString(),
+      assetSizeTier: r.profile.assetSizeTier,
+      hqCountry: r.profile.hqCountry ?? null,
+      reportCount: r.reportCount.length,
+    }));
+  } catch (e) {
+    logJson({
+      level: 'warn',
+      route: 'db.recentAnalyses',
+      msg: 'db.recent_failed',
+      err: (e as Error).message,
+    });
+    return [];
+  }
+}
+
+/**
  * Return up to `limit` previous analyses for a given bank name, newest
  * first. Used by the History view.
  */

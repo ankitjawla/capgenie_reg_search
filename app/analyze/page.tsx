@@ -103,10 +103,19 @@ export default function Home() {
     applyTheme(next);
   }
 
-  // --- share-link hydration (on first mount only) ---
+  // --- share-link / query-string hydration (on first mount only) ---
   useEffect(() => {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
+    // ?bankName=X — used by /history "click to re-run" and arbitrary
+    // bookmark / deep-link integrations.
+    const params = new URLSearchParams(window.location.search);
+    const queryBank = params.get('bankName')?.trim();
+    if (queryBank) {
+      setBankName(queryBank);
+      void runAnalysis(queryBank);
+      return;
+    }
     const share = readShareFromLocation();
     if (share) {
       setBankName(share.bankName);
@@ -244,6 +253,34 @@ export default function Home() {
     setError(null);
     setProgress([]);
     toast('Saved analysis cleared');
+  }
+  async function handleExportPdf() {
+    if (!apiResult || !profile) return;
+    const composed = { ...apiResult, profile, reports };
+    try {
+      const res = await fetch('/api/export/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ result: composed }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        toast.error('PDF export failed', { description: data?.error });
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(bankName || 'analysis').toLowerCase().replace(/\W+/g, '-')}-capgenie-memo.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('PDF downloaded', { description: 'Compliance memo saved to your downloads.' });
+    } catch (e) {
+      toast.error('PDF export failed', { description: (e as Error).message });
+    }
   }
   async function handleCopyShareLink() {
     if (!bankName) return;
@@ -449,6 +486,15 @@ export default function Home() {
                   className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
                 >
                   Research transcript ({trace.searches.length})
+                </button>
+              )}
+              {apiResult && (
+                <button
+                  type="button"
+                  onClick={handleExportPdf}
+                  className="rounded-lg bg-accent-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-accent-600"
+                >
+                  Download PDF memo
                 </button>
               )}
               <button
