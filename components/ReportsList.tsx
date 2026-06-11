@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import type { BankProfile, ReportRecommendation, Jurisdiction } from '@/lib/types';
 import { csvFilename, downloadCsv, reportsToCsv } from '@/lib/export';
 import { resolveEvidence } from '@/lib/evidence';
+import { linkGlossaryTerms } from '@/lib/glossary-linker';
 
 const JURISDICTION_LABEL: Record<Jurisdiction, string> = {
   US: 'United States',
@@ -244,7 +245,7 @@ function ReportRow({
           <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{r.fullName}</p>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{r.description}</p>
           <p className="mt-2 text-sm text-brand-700 dark:text-brand-400">
-            <span className="font-medium">Why it applies:</span> {r.applicabilityReason}
+            <span className="font-medium">Why it applies:</span> {linkGlossaryTerms(r.applicabilityReason)}
           </p>
         </div>
         <div className="flex flex-col items-end gap-1 whitespace-nowrap">

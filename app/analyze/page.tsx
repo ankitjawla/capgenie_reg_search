@@ -16,6 +16,7 @@ import ResearchTranscript from '@/components/ResearchTranscript';
 import FollowupChat from '@/components/FollowupChat';
 import ProgressGraph from '@/components/ProgressGraph';
 import CommandPalette from '@/components/CommandPalette';
+import RiskScoreCard from '@/components/RiskScoreCard';
 import {
   ReportsByJurisdictionChart,
   ReportsByFrequencyChart,
@@ -63,6 +64,7 @@ export default function Home() {
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const [theme, setTheme] = useState<Theme>('system');
   const [shareCopied, setShareCopied] = useState(false);
+  const [diffSummary, setDiffSummary] = useState<{ added: string[]; removed: string[] } | null>(null);
   const hydratedRef = useRef(false);
 
   const profile = editedProfile ?? apiResult?.profile ?? null;
@@ -199,6 +201,30 @@ export default function Home() {
               setProgress((p) => [...p, { kind: 'info', text: evt.message }]);
             } else if (evt.type === 'result') {
               setApiResult(evt.result);
+              // Same-bank diff: compare to the saved snapshot from
+              // the previous run, then refresh the snapshot.
+              try {
+                const key = `capgenie:reports-snapshot:${name.trim().toLowerCase()}`;
+                const prev = window.localStorage.getItem(key);
+                const newIds = new Set(evt.result.reports.map((r) => r.id));
+                if (prev) {
+                  const prevSet = new Set<string>(JSON.parse(prev) as string[]);
+                  const added: string[] = [];
+                  const removed: string[] = [];
+                  evt.result.reports.forEach((r) => {
+                    if (!prevSet.has(r.id)) added.push(r.shortName);
+                  });
+                  prevSet.forEach((id) => {
+                    if (!newIds.has(id)) removed.push(id);
+                  });
+                  setDiffSummary({ added, removed });
+                } else {
+                  setDiffSummary(null);
+                }
+                window.localStorage.setItem(key, JSON.stringify([...newIds]));
+              } catch {
+                /* localStorage disabled */
+              }
               if (evt.result.fromCache) {
                 toast.info('Loaded from cache', {
                   description: 'Saved an Azure + Tavily round-trip.',
@@ -281,6 +307,53 @@ export default function Home() {
     } catch (e) {
       toast.error('PDF export failed', { description: (e as Error).message });
     }
+  }
+  async function handleExportIcs() {
+    if (!apiResult || !profile) return;
+    const composed = { ...apiResult, profile, reports };
+    try {
+      const res = await fetch('/api/export/ics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ result: composed, bankName }),
+      });
+      if (!res.ok) {
+        toast.error('Calendar export failed', { description: `HTTP ${res.status}` });
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(bankName || 'analysis').toLowerCase().replace(/\W+/g, '-')}-capgenie.ics`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Calendar downloaded', {
+        description: 'Subscribe in Outlook or Google Calendar to track upcoming filings.',
+      });
+    } catch (e) {
+      toast.error('Calendar export failed', { description: (e as Error).message });
+    }
+  }
+  function handleExportJson() {
+    if (!apiResult || !profile) return;
+    const payload = JSON.stringify(
+      { bankName, generatedAtIso: apiResult.generatedAtIso, profile, reports, trace: apiResult.trace },
+      null,
+      2,
+    );
+    const blob = new Blob([payload], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(bankName || 'analysis').toLowerCase().replace(/\W+/g, '-')}-capgenie.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast.success('Profile JSON downloaded', { description: 'Archive the full analysis for compliance.' });
   }
   async function handleCopyShareLink() {
     if (!bankName) return;
@@ -489,13 +562,29 @@ export default function Home() {
                 </button>
               )}
               {apiResult && (
-                <button
-                  type="button"
-                  onClick={handleExportPdf}
-                  className="rounded-lg bg-accent-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-accent-600"
-                >
-                  Download PDF memo
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={handleExportPdf}
+                    className="rounded-lg bg-accent-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-accent-600"
+                  >
+                    PDF memo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExportIcs}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                  >
+                    📅 Calendar (.ics)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExportJson}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                  >
+                    JSON
+                  </button>
+                </>
               )}
               <button
                 type="button"
@@ -513,6 +602,31 @@ export default function Home() {
               </button>
             </div>
           </div>
+
+          <RiskScoreCard reports={reports} />
+
+          {diffSummary && (
+            <div className="rounded-2xl border border-brand-200 bg-brand-50 p-4 text-sm text-brand-900 dark:border-brand-800/60 dark:bg-brand-900/30 dark:text-brand-100 print-card">
+              <strong>Changes since the last cached run:</strong>{' '}
+              {diffSummary.added.length > 0 && (
+                <>
+                  <span className="text-energy-600 dark:text-energy-400">+{diffSummary.added.length}</span>{' '}
+                  {diffSummary.added.slice(0, 4).join(', ')}
+                  {diffSummary.added.length > 4 && ` +${diffSummary.added.length - 4} more`}.{' '}
+                </>
+              )}
+              {diffSummary.removed.length > 0 && (
+                <>
+                  <span className="text-accent-600 dark:text-accent-400">−{diffSummary.removed.length}</span>{' '}
+                  {diffSummary.removed.slice(0, 4).join(', ')}
+                  {diffSummary.removed.length > 4 && ` +${diffSummary.removed.length - 4} more`}.
+                </>
+              )}
+              {diffSummary.added.length === 0 && diffSummary.removed.length === 0 && (
+                <span> No new or dropped reports.</span>
+              )}
+            </div>
+          )}
 
           {/* Visual analytics — adapts to which tab is active */}
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

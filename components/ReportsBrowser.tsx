@@ -3,12 +3,57 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { CatalogEntry } from '@/lib/reports-catalog';
-import type { Jurisdiction, ReportFrequency } from '@/lib/types';
+import type { Activity, Jurisdiction, ReportFrequency } from '@/lib/types';
 
 interface Props {
   entries: CatalogEntry[];
   jurisdictionLabel: Record<Jurisdiction, string>;
   frequencyLabel: Record<ReportFrequency, string>;
+}
+
+const ACTIVITIES: Activity[] = [
+  'retail_deposits',
+  'commercial_lending',
+  'mortgage_lending',
+  'credit_cards',
+  'derivatives_trading',
+  'securities_underwriting',
+  'broker_dealer',
+  'asset_management',
+  'custody_services',
+  'cross_border_payments',
+  'foreign_exchange',
+  'trade_finance',
+  'crypto_assets',
+  'priority_sector_lending',
+  'agriculture_lending',
+];
+
+// Approximate activity-to-report mapping by report-ID substring. These
+// are heuristic — the actual rules engine has the full logic. This
+// reflects the most common applicability hooks.
+const ACTIVITY_HINTS: Record<Activity, RegExp> = {
+  retail_deposits: /FR_2900|MAS_610|MA_BS1|DSB_RETURNS|A2_A1|ALM/i,
+  commercial_lending: /FFIEC_031|FR_Y_9C|COREP|ANACREDIT|CAR|MAS_637|BSR1|HK_CAR/i,
+  mortgage_lending: /HMDA|MLAR|FR_Y_14M|BSR1|MAS_610/i,
+  credit_cards: /HMDA|FR_Y_14M|CRA|MAS_637/i,
+  derivatives_trading: /FFIEC_102|FR_Y_14|MIFIR|MAS_637/i,
+  securities_underwriting: /FFIEC_102|MIFIR|13F|10K/i,
+  broker_dealer: /FFIEC_102|MIFIR|ADV|13F|FORM_ADV/i,
+  asset_management: /N_1A|ADV|FORM_ADV|FATCA|13F/i,
+  custody_services: /AnaCredit|MiFIR|FATCA/i,
+  cross_border_payments: /TIC_BL|FFIEC_009|FETERS|FOREIGN_EXPOSURE/i,
+  foreign_exchange: /TIC_BL|FFIEC_009|FETERS|FOREIGN_EXPOSURE|FX/i,
+  trade_finance: /FFIEC_009|MAS_757|FETERS/i,
+  crypto_assets: /MICA|BITLICENSE|MSB|FINCEN/i,
+  priority_sector_lending: /PSL/i,
+  agriculture_lending: /PSL|BSR1/i,
+};
+
+function activityMatches(entry: CatalogEntry, activity: Activity): boolean {
+  return ACTIVITY_HINTS[activity].test(entry.id) ||
+    ACTIVITY_HINTS[activity].test(entry.description.toLowerCase()) ||
+    ACTIVITY_HINTS[activity].test(entry.fullName.toLowerCase());
 }
 
 const FREQ_ORDER: ReportFrequency[] = [
@@ -23,16 +68,22 @@ const FREQ_ORDER: ReportFrequency[] = [
   'ad_hoc',
 ];
 
+function humanize(s: string): string {
+  return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function ReportsBrowser({ entries, jurisdictionLabel, frequencyLabel }: Props) {
   const [search, setSearch] = useState('');
   const [jurisdiction, setJurisdiction] = useState<Jurisdiction | 'all'>('all');
   const [frequency, setFrequency] = useState<ReportFrequency | 'all'>('all');
+  const [activity, setActivity] = useState<Activity | 'all'>('all');
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return entries.filter((e) => {
       if (jurisdiction !== 'all' && e.jurisdiction !== jurisdiction) return false;
       if (frequency !== 'all' && e.frequency !== frequency) return false;
+      if (activity !== 'all' && !activityMatches(e, activity)) return false;
       if (!q) return true;
       return (
         e.id.toLowerCase().includes(q) ||
@@ -42,7 +93,7 @@ export default function ReportsBrowser({ entries, jurisdictionLabel, frequencyLa
         e.description.toLowerCase().includes(q)
       );
     });
-  }, [entries, search, jurisdiction, frequency]);
+  }, [entries, search, jurisdiction, frequency, activity]);
 
   const jurisdictions = Array.from(new Set(entries.map((e) => e.jurisdiction))) as Jurisdiction[];
 
@@ -83,6 +134,21 @@ export default function ReportsBrowser({ entries, jurisdictionLabel, frequencyLa
               {FREQ_ORDER.filter((f) => entries.some((e) => e.frequency === f)).map((f) => (
                 <option key={f} value={f}>
                   {frequencyLabel[f]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-slate-600 dark:text-slate-300">
+            Triggered by
+            <select
+              value={activity}
+              onChange={(e) => setActivity(e.target.value as Activity | 'all')}
+              className="ml-1 rounded border border-slate-300 bg-white px-1.5 py-1 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            >
+              <option value="all">Any activity</option>
+              {ACTIVITIES.map((a) => (
+                <option key={a} value={a}>
+                  {humanize(a)}
                 </option>
               ))}
             </select>

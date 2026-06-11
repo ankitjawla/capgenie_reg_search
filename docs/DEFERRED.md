@@ -3,6 +3,49 @@
 Items from the code review that are **real** and **worth doing**, but each
 deserves its own dedicated round. Keeping them here so they don't get lost.
 
+## Bank-watcher subscriptions
+
+**Why it matters.** Today CapGenie is a "run-on-demand" tool. Compliance
+teams want passive monitoring: "tell me when the report list for
+HSBC changes because (a) the cache expired and a fresh run found something
+different, or (b) `RULES_VERSION` bumped on the server."
+
+**Approach.**
+1. New `subscriptions` Postgres table (`id`, `bank_name`, `email`,
+   `rules_version`, `last_report_ids`, `created_at`).
+2. New `/api/subscribe` endpoint behind a CAPTCHA or magic-link email
+   verification to prevent abuse.
+3. A scheduled Vercel Cron (or external cron) job that re-runs each
+   subscribed bank weekly, computes the diff against `last_report_ids`,
+   and sends an email via Resend / SendGrid when the diff is non-empty.
+4. Unsubscribe link in every email; encode a signed token.
+
+**Why deferred.** Needs an email provider integration (free tier exists at
+Resend) + abuse protection. A separate small focused round.
+
+## Public read-only API key system
+
+**Why it matters.** External integrators (Slack bots, Zapier, custom
+dashboards) need a programmatic way in. Today the only entry point is
+the browser; rate-limiting is per-IP which doesn't scale to multi-tenant
+integrators.
+
+**Approach.**
+1. New `api_keys` table (`id`, `key_hash` (sha256), `owner_email`,
+   `created_at`, `last_used_at`, `revoked_at`).
+2. Middleware extension that checks `Authorization: Bearer <key>` —
+   when present, switch the rate-limit bucket from per-IP to per-key
+   (higher quota), and bypass Origin-allow-list.
+3. `/account/keys` page to create / view / revoke keys (gated behind
+   simple email magic-link auth — no full account system).
+4. New `/api/v1/analyze` versioned endpoint that's the same as the
+   internal stream but with key auth + JSON-only responses.
+
+**Why deferred.** Needs at least a thin auth layer (magic-link or
+OAuth provider). Not trivial to ship safely in a round with other
+features. Best as its own dedicated round once the rest of the surface
+is stable.
+
 ## Canonicalize the cache key by entity, not string
 
 **Why it matters.** Today `lib/db/index.ts` keys on `trim().toLowerCase(bankName)` +

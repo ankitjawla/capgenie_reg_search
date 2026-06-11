@@ -1,6 +1,7 @@
 import type { BankProfile, Jurisdiction } from '@/lib/types';
 import Flag from './ui/Flag';
 import KpiTile from './ui/KpiTile';
+import BankLogo from './BankLogo';
 
 const TIER_LABELS: Record<string, string> = {
   lt_1B: '< $1B',
@@ -50,21 +51,25 @@ export default function ProfileCard({ profile }: { profile: BankProfile }) {
       className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900 print-card"
     >
       <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            {profile.legalName}
-          </h2>
-          {profile.commonName && profile.commonName !== profile.legalName && (
-            <p className="text-sm text-slate-500 dark:text-slate-400">also known as {profile.commonName}</p>
-          )}
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-            <span>{humanize(profile.category)}</span>
-            {profile.hqCountry && (
-              <>
-                <span aria-hidden>·</span>
-                <span>HQ {profile.hqCountry}</span>
-              </>
+        <div className="flex items-start gap-3">
+          {/* Clearbit logo with monogram fallback. */}
+          <BankLogo profile={profile} />
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+              {profile.legalName}
+            </h2>
+            {profile.commonName && profile.commonName !== profile.legalName && (
+              <p className="text-sm text-slate-500 dark:text-slate-400">also known as {profile.commonName}</p>
             )}
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <span>{humanize(profile.category)}</span>
+              {profile.hqCountry && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span>HQ {profile.hqCountry}</span>
+                </>
+              )}
+            </div>
           </div>
         </div>
         {designations.length > 0 && (
